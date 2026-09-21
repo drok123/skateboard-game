@@ -10,23 +10,24 @@ signal grind_ended()
 # --- Tuned for readable beta feel ---
 const MAX_SPEED := 16.0
 const PUSH_ACCEL := 28.0
-const CARVE_ACCEL := 14.0
+const CARVE_ACCEL := 10.0
 const FRICTION := 5.5
 const BRAKE_FRICTION := 16.0
-const TURN_SPEED := 3.1
-const TURN_SPEED_FAST := 4.8
+const TURN_SPEED := 2.4
+const TURN_SPEED_FAST := 3.6
 const JUMP_VELOCITY := 9.8
 const OLLIE_FORWARD_BOOST := 2.8
-const AIR_CONTROL := 0.32
-const AIR_TURN := 1.9
-const GRAVITY := 26.0
+const AIR_CONTROL := 0.22
+const AIR_TURN := 1.35
+const GRAVITY := 22.0
+const GRAVITY_UP := 16.0  # Session hang — lighter while rising
 const MAX_FALL := -40.0
 const LAND_STICK := 0.62
-const CARVE_LEAN_MAX := 0.42
+const CARVE_LEAN_MAX := 0.52
 const SECONDARY_RECOVER_RATE := 1.8
-const GRIND_MIN_SPEED := 3.5
-const GRIND_FRICTION := 1.2
-const GRIND_SNAP := 18.0
+const GRIND_MIN_SPEED := 2.4
+const GRIND_FRICTION := 0.7
+const GRIND_SNAP := 28.0
 const GRIND_OLLIE_BOOST := 3.0
 const SPEED_MPH_SCALE := 2.15  # game units → readable HUD mph
 
@@ -66,7 +67,8 @@ func apply_movement(wish: Vector3, jump_pressed: bool, delta: float) -> void:
 	var land_impact := 0.0
 
 	if not on_floor and not _grinding:
-		velocity.y = maxf(velocity.y - GRAVITY * delta, MAX_FALL)
+		var g := GRAVITY_UP if velocity.y > 0.0 else GRAVITY
+		velocity.y = maxf(velocity.y - g * delta, MAX_FALL)
 		_airborne = true
 	elif on_floor and velocity.y < 0.0:
 		land_impact = clampf((-velocity.y) / 18.0, 0.15, 1.0)
@@ -104,14 +106,18 @@ func apply_movement(wish: Vector3, jump_pressed: bool, delta: float) -> void:
 		var turn_dir := wrapf(wish_angle - _facing, -PI, PI)
 		# Lean only while carving/accelerating — upright at rest (P0 idle lean).
 		var lean_target := 0.0
-		var turning := absf(turn_dir) > 0.12
-		var moving := speed > 2.0 or wish.length_squared() > 0.25
+		var turning := absf(turn_dir) > 0.10
+		var moving := speed > 1.5 or wish.length_squared() > 0.2
 		if turning and moving:
-			lean_target = clampf(-turn_dir * 1.6, -CARVE_LEAN_MAX, CARVE_LEAN_MAX)
-			lean_target *= clampf(speed / 5.0, 0.25, 1.0)
+			lean_target = clampf(-turn_dir * 2.1, -CARVE_LEAN_MAX, CARVE_LEAN_MAX)
+			lean_target *= clampf(speed / 4.0, 0.35, 1.0)
 			if not on_floor:
-				lean_target *= 0.35
-		_board_lean = lerpf(_board_lean, lean_target, 14.0 * delta)
+				lean_target *= 0.3
+			# Session carve weight: bleed speed into the turn.
+			if on_floor:
+				var bleed := 1.0 - clampf(absf(turn_dir) * 0.55, 0.0, 0.28)
+				horizontal *= bleed
+		_board_lean = lerpf(_board_lean, lean_target, 9.0 * delta)
 	else:
 		var fric := FRICTION if speed > 2.0 else BRAKE_FRICTION
 		horizontal = horizontal.move_toward(Vector3.ZERO, fric * control * delta)
@@ -191,7 +197,7 @@ func _update_grind_state() -> void:
 				_tricks.notify_trick_started("grind")
 			if hit.has("point"):
 				var pt: Vector3 = hit["point"]
-				global_position.y = lerpf(global_position.y, pt.y + 0.55, 0.45)
+				global_position.y = lerpf(global_position.y, pt.y + 0.55, 0.72)
 		return
 	if _grinding:
 		_grinding = false
