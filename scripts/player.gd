@@ -29,6 +29,8 @@ const GRIND_MIN_SPEED := 2.4
 const GRIND_FRICTION := 0.7
 const GRIND_SNAP := 28.0
 const GRIND_OLLIE_BOOST := 3.0
+const GRIND_MIN_NORMAL_Y := 0.45  # top-face only — no side sink
+const GRIND_FOOT_CLEAR := 0.04
 const SPEED_MPH_SCALE := 2.15  # game units → readable HUD mph
 
 @onready var mesh: Node3D = $MeshPivot
@@ -74,8 +76,10 @@ func apply_movement(wish: Vector3, jump_pressed: bool, delta: float) -> void:
 		land_impact = clampf((-velocity.y) / 18.0, 0.15, 1.0)
 		velocity.y = 0.0
 
-	if on_floor and not _was_on_floor and not _grinding:
-		_on_landed(land_impact)
+	# Land when leaving air (not only floor-edge) so FOV punch always fires after ollie.
+	if on_floor and not _grinding and (_airborne or not _was_on_floor):
+		var impact := land_impact if land_impact > 0.2 else 0.7
+		_on_landed(impact)
 
 	if jump_pressed and (on_floor or _grinding):
 		_do_ollie(_grinding)
@@ -186,8 +190,12 @@ func _grind_move(horizontal: Vector3, wish: Vector3, delta: float) -> Vector3:
 func _update_grind_state() -> void:
 	var hit := _find_grind_collision()
 	var speed := Vector3(velocity.x, 0.0, velocity.z).length()
-	if hit.has("axis") and speed >= GRIND_MIN_SPEED * 0.65 and (not is_on_floor() or _grinding or velocity.y <= 0.5):
+	var can_lock := hit.has("axis") and speed >= GRIND_MIN_SPEED * 0.55
+	if can_lock:
 		_grind_axis = hit["axis"]
+		var pt: Vector3 = hit["point"]
+		# Sit on rail top — origin ≈ feet; never lerp into the collider (QA sink).
+		var target_y := pt.y - GRIND_FOOT_CLEAR
 		if not _grinding:
 			_grinding = true
 			_airborne = false
@@ -195,9 +203,10 @@ func _update_grind_state() -> void:
 			_play_sfx_grind_start()
 			if _tricks and _tricks.has_method("notify_trick_started"):
 				_tricks.notify_trick_started("grind")
-			if hit.has("point"):
-				var pt: Vector3 = hit["point"]
-				global_position.y = lerpf(global_position.y, pt.y + 0.55, 0.72)
+			global_position.y = target_y
+		else:
+			global_position.y = lerpf(global_position.y, target_y, 0.55)
+		velocity.y = 0.0
 		return
 	if _grinding:
 		_grinding = false
@@ -206,6 +215,7 @@ func _update_grind_state() -> void:
 
 
 func _find_grind_collision() -> Dictionary:
+	## Top-face grindables only (Skater XL ledge clarity). Side hits caused geo sink.
 	for i in get_slide_collision_count():
 		var col := get_slide_collision(i)
 		var collider := col.get_collider()
@@ -214,9 +224,11 @@ func _find_grind_collision() -> Dictionary:
 		if not (collider as Node).is_in_group("grindable"):
 			continue
 		var n := col.get_normal()
-		# Rail axis ≈ along the edge: horizontal, perpendicular to outward normal.
+		if n.y < GRIND_MIN_NORMAL_Y:
+			continue
 		var axis := Vector3.UP.cross(n)
 		if axis.length_squared() < 0.01:
+			# Flat-ish top: rail runs along velocity / facing.
 			axis = Vector3(velocity.x, 0.0, velocity.z)
 		axis.y = 0.0
 		if axis.length_squared() < 0.01:
@@ -324,8 +336,9 @@ func _land_squash(impact: float = 0.5) -> void:
 	if cam == null:
 		cam = get_viewport().get_camera_3d()
 	if cam and cam.has_method("apply_punch"):
-		# Unmistakable FOV land punch (PASS bar) — do not soften for juice timing.
-		cam.call("apply_punch", clampf(1.0 + impact * 0.8, 1.0, 1.6), 0.32)
+		# Unmistakable FOV land punch (Session PASS bar) — cite NfY46Ho_dEo.
+		var punch_s := clampf(1.05 + impact * 0.75, 1.05, 1.6)
+		cam.call_deferred("apply_punch", punch_s, 0.34)
 
 	if mesh == null:
 		return
@@ -338,16 +351,16 @@ func _land_squash(impact: float = 0.5) -> void:
 	mesh.scale = Vector3.ONE
 	_land_tween = create_tween()
 	_land_tween.set_parallel(true)
-	_land_tween.tween_property(mesh, "scale", Vector3(1.28, 0.55, 1.28), 0.06)
-	_land_tween.tween_property(mesh, "position:y", base_y - 0.12, 0.06)
+	_land_tween.tween_property(mesh, "scale", Vector3(1.55, 0.28, 1.55), 0.08)
+	_land_tween.tween_property(mesh, "position:y", base_y - 0.36, 0.08)
 	if board:
 		_land_tween.tween_property(board, "scale", board_base_scale * Vector3(1.2, 0.35, 1.2), 0.09)
 		_land_tween.tween_property(board, "position:y", board_base_y - 0.06, 0.09)
 	_land_tween.set_parallel(false)
-	_land_tween.tween_interval(0.04)
+	_land_tween.tween_interval(0.10)
 	_land_tween.set_parallel(true)
-	_land_tween.tween_property(mesh, "scale", Vector3.ONE, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	_land_tween.tween_property(mesh, "position:y", base_y, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_land_tween.tween_property(mesh, "scale", Vector3.ONE, 0.28).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_land_tween.tween_property(mesh, "position:y", base_y, 0.28).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	if board:
 		_land_tween.tween_property(board, "scale", board_base_scale, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		_land_tween.tween_property(board, "position:y", board_base_y, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
