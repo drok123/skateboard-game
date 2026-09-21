@@ -224,7 +224,7 @@ func _make_mat(albedo: Color, roughness: float, specular: float) -> StandardMate
 	mat.albedo_color = albedo
 	mat.roughness = roughness
 	mat.metallic = 0.0
-	mat.specular = specular
+	mat.metallic_specular = specular
 	return mat
 
 
@@ -267,25 +267,51 @@ func _import_glb(path: String) -> Node3D:
 
 
 func _mesh_aabb(node: Node) -> AABB:
+	# Skin inverse binds can offset the rendered vertices from the raw mesh AABB.
+	# Measure the rest pose in Emily space, including the imported root's scale/yaw.
 	var merged := AABB()
 	var any := false
 	for child in node.find_children("*", "MeshInstance3D", true, false):
 		var mi := child as MeshInstance3D
 		if mi == null or mi.mesh == null:
 			continue
-		var local := mi.get_aabb()
-		var xf := mi.transform
-		var p: Node = mi.get_parent()
-		while p != null and p != node:
-			if p is Node3D:
-				xf = (p as Node3D).transform * xf
-			p = p.get_parent()
-		var world_aabb := _xform_aabb(xf, local)
-		if not any:
-			merged = world_aabb
+		var skel := mi.get_node_or_null(mi.skeleton) as Skeleton3D
+		var skin := mi.skin
+		var xf := global_transform.affine_inverse() * mi.global_transform
+		if skel == null or skin == null:
+			var bounds := _xform_aabb(xf, mi.get_aabb())
+			merged = merged.merge(bounds) if any else bounds
 			any = true
-		else:
-			merged = merged.merge(world_aabb)
+			continue
+		var skeleton_xf := global_transform.affine_inverse() * skel.global_transform
+		var binds: Array[Transform3D] = []
+		for bind_index in skin.get_bind_count():
+			var bone := skin.get_bind_bone(bind_index)
+			if skin.get_bind_name(bind_index) != &"":
+				bone = skel.find_bone(skin.get_bind_name(bind_index))
+			var pose := skel.get_bone_global_pose(bone) if bone >= 0 else Transform3D.IDENTITY
+			binds.append(skeleton_xf * pose * skin.get_bind_pose(bind_index))
+		for surface in mi.mesh.get_surface_count():
+			var arrays := mi.mesh.surface_get_arrays(surface)
+			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+			var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+			var influences: int = weights.size() / maxi(vertices.size(), 1)
+			for vertex_index in vertices.size():
+				var vertex := vertices[vertex_index]
+				var posed := Vector3.ZERO
+				var total_weight := 0.0
+				for influence in influences:
+					var index := vertex_index * influences + influence
+					var weight := weights[index]
+					if weight <= 0.0:
+						continue
+					posed += (binds[bones[index]] * vertex) * weight
+					total_weight += weight
+				if total_weight <= 0.0:
+					posed = xf * vertex
+				merged = merged.expand(posed) if any else AABB(posed, Vector3.ZERO)
+				any = true
 	return merged if any else AABB()
 
 

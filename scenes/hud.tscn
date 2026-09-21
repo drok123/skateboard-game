@@ -59,9 +59,9 @@ shadow_color = Color(0, 0, 0, 0.35)
 shadow_offset = Vector2(1, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_toast"]
-font_size = 42
+font_size = 30
 font_color = Color(0.99, 0.96, 0.9, 1)
-outline_size = 12
+outline_size = 4
 outline_color = Color(0.05, 0.04, 0.02, 1)
 shadow_size = 2
 shadow_color = Color(0, 0, 0, 0.65)
@@ -194,7 +194,7 @@ theme_override_constants/margin_bottom = 6
 
 [node name="HintLabel" type="Label" parent="Margin/Root/HintRow/HintPanel/HintMargin"]
 layout_mode = 2
-text = "WASD — move · Space — ollie · H hide"
+text = "W push | S brake | A / D carve | Space pop\nAir: J / K flips | U / I spins | O shuv | P tre\nPad: left stick ride | A pop | right stick air tricks\nR / Pad Back respawn | Esc pause | H toggle help"
 label_settings = SubResource("LabelSettings_hint")
 horizontal_alignment = 1
 

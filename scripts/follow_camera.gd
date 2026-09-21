@@ -13,6 +13,14 @@ extends Camera3D
 @export var follow_speed := 9.5
 @export var yaw_follow_speed := 9.0
 @export var look_speed := 11.0
+@export var speed_fov_add := 7.0
+@export var framing_speed := 14.0
+@export var collision_radius := 0.28
+@export_flags_3d_physics var obstruction_mask: int = 1
+
+var _last_target_position := Vector3.ZERO
+var _speed_blend := 0.0
+var _camera_shape := SphereShape3D.new()
 
 var _target: Node3D
 var _look_target: Node3D
@@ -29,6 +37,7 @@ var _punch_tween: Tween
 func _ready() -> void:
 	add_to_group("follow_camera")
 	_base_fov = fov
+	_camera_shape.radius = collision_radius
 	if target_path != NodePath(""):
 		_target = get_node_or_null(target_path) as Node3D
 	if _target == null:
@@ -40,7 +49,8 @@ func _ready() -> void:
 			_look_target = look
 		_yaw = _desired_yaw()
 		_prev_yaw = _yaw
-		global_position = _desired_position(_yaw)
+		_last_target_position = _target.global_position
+		global_position = _safe_position(_desired_position(_yaw))
 		look_at(_look_position(_yaw), Vector3.UP)
 
 
@@ -95,22 +105,32 @@ func _start_punch(offset: Vector3, fov_add: float, duration: float, trans: int) 
 
 
 func _physics_process(delta: float) -> void:
-	if _target == null:
+	if not is_instance_valid(_target):
 		return
+	var teleported := _target.global_position.distance_to(_last_target_position) > 8.0
+	_last_target_position = _target.global_position
+	var speed := Vector2(_body.velocity.x, _body.velocity.z).length() if _body else 0.0
+	_speed_blend = lerpf(_speed_blend, clampf(speed / framing_speed, 0.0, 1.0), 1.0 - exp(-3.0 * delta))
 	var desired_yaw := _desired_yaw()
+	if teleported:
+		_yaw = desired_yaw
+		_prev_yaw = _yaw
+		_yaw_rate = 0.0
 	_yaw = lerp_angle(_yaw, desired_yaw, 1.0 - exp(-yaw_follow_speed * delta))
 	var dyaw := wrapf(_yaw - _prev_yaw, -PI, PI)
-	_yaw_rate = lerpf(_yaw_rate, dyaw / maxf(delta, 0.0001), 0.35)
+	_yaw_rate = lerpf(_yaw_rate, dyaw / maxf(delta, 0.0001), 1.0 - exp(-12.0 * delta))
 	_prev_yaw = _yaw
 
 	var desired := _desired_position(_yaw) + _punch_offset
-	global_position = global_position.lerp(desired, 1.0 - exp(-follow_speed * delta))
+	# Resolve after smoothing too, so following around a corner cannot cut through it.
+	var blended := desired if teleported else global_position.lerp(desired, 1.0 - exp(-follow_speed * delta))
+	global_position = _safe_position(blended)
 
 	var look_at_pos := _look_position(_yaw)
 	var from := global_transform
 	var to := global_transform.looking_at(look_at_pos, Vector3.UP)
-	global_transform = from.interpolate_with(to, 1.0 - exp(-look_speed * delta))
-	fov = _base_fov + _punch_fov_add
+	global_transform = to if teleported else from.interpolate_with(to, 1.0 - exp(-look_speed * delta))
+	fov = _base_fov + _speed_blend * speed_fov_add + _punch_fov_add
 
 
 func _desired_yaw() -> float:
@@ -137,7 +157,7 @@ func _desired_position(yaw: float) -> Vector3:
 	var right := _right(yaw)
 	# Shoulder into the carve so turns feel playful (skate. plaza energy), not stuck orbit.
 	var shoulder := clampf(_yaw_rate * 0.12, -1.0, 1.0) * shoulder_bias
-	return _target.global_position - forward * distance + right * shoulder + Vector3.UP * height
+	return _target.global_position - forward * (distance + _speed_blend * 0.8) + right * shoulder + Vector3.UP * height
 
 
 func _look_position(yaw: float) -> Vector3:
@@ -151,3 +171,23 @@ func _look_position(yaw: float) -> Vector3:
 	var ahead := look_ahead + clampf(absf(_yaw_rate) * 0.08, 0.0, 1.0) * look_ahead_turn
 	var into_turn := clampf(_yaw_rate * 0.1, -1.0, 1.0) * 0.65
 	return base + forward * ahead + right * into_turn
+
+
+func _safe_position(desired: Vector3) -> Vector3:
+	# Sweep a camera-sized volume against world geometry; exclude the rider.
+	var anchor := _target.global_position + Vector3.UP * look_height
+	var motion := desired - anchor
+	if motion.length_squared() < 0.001:
+		return desired
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = _camera_shape
+	query.transform = Transform3D(Basis.IDENTITY, anchor)
+	query.motion = motion
+	query.collision_mask = obstruction_mask
+	query.margin = 0.04
+	if _body:
+		query.exclude = [_body.get_rid()]
+	var fractions := get_world_3d().direct_space_state.cast_motion(query)
+	if fractions.size() == 2:
+		return anchor + motion * fractions[0]
+	return desired
