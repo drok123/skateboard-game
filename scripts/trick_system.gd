@@ -25,6 +25,10 @@ var _emily: Node3D
 var _emily_rest_scale := Vector3.ONE
 var _emily_rest_y := 0.0
 var _airborne_open := false
+var _board: MeshInstance3D
+var _flip_tween: Tween
+var _board_spin_y := 0.0
+var _air_elapsed := 0.0
 
 
 func _ready() -> void:
@@ -51,6 +55,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	_update_loco_clip()
+	_try_wish_air_upgrade()
+	_apply_board_spin(delta)
 	if _combo_mult <= 1:
 		return
 	_combo_timer -= delta
@@ -86,6 +92,7 @@ func _bind_emily_pose() -> void:
 		_emily = mesh
 	_emily_rest_scale = _emily.scale
 	_emily_rest_y = _emily.position.y
+	_board = get_parent().get_node_or_null("MeshPivot/Board") as MeshInstance3D
 	_play_idle_pose()
 
 
@@ -166,7 +173,9 @@ func play_locomotion(clip_name: String) -> void:
 
 func notify_trick_started(trick_name: String = "ollie") -> void:
 	_active_trick = trick_name
-	_airborne_open = true
+	_air_elapsed = 0.0
+	# Grind is on-rail — toast only, no air wish upgrades / flip spin.
+	_airborne_open = trick_name != "grind"
 	trick_started.emit(trick_name)
 	_play_clip(trick_name)
 	if trick_name == "ollie":
@@ -190,6 +199,8 @@ func notify_trick_landed(trick_name: String = "") -> void:
 	_combo_timer = combo_window_sec
 	trick_landed.emit(name, gained)
 	combo_changed.emit(_combo_mult, _combo_score)
+	_land_toast(name, gained)
+	_reset_board_spin()
 	_active_trick = ""
 	_damp_secondary_for_catch()
 
@@ -230,6 +241,20 @@ func _kill_pose_tween() -> void:
 		_pose_tween.kill()
 	_pose_tween = null
 
+## Physics calls this so camera-readable land squash on EmilyMesh/Board isn't overwritten.
+func suppress_pose_for_land(seconds: float = 0.4) -> void:
+	_kill_pose_tween()
+	if _anim:
+		_anim.stop()
+	if _emily:
+		# Leave Emily at rest; Physics tweens EmilyMesh locally.
+		_emily.scale = _emily_rest_scale
+		_emily.position.y = _emily_rest_y
+	# Resume idle after impact window.
+	var tree := get_tree()
+	if tree:
+		tree.create_timer(seconds).timeout.connect(_play_idle_pose)
+
 
 func _play_idle_pose() -> void:
 	if _emily == null:
@@ -261,6 +286,7 @@ func _play_ollie_pose() -> void:
 
 
 func _play_flip_pose(trick_name: String) -> void:
+	_start_board_spin(trick_name)
 	if _emily == null:
 		return
 	_kill_pose_tween()
@@ -277,27 +303,17 @@ func _play_flip_pose(trick_name: String) -> void:
 
 
 func _play_land_pose() -> void:
-	if _emily == null:
-		return
+	# Readable land squash is Physics-owned (EmilyMesh/Board). Keep toast/combo only.
 	_kill_pose_tween()
-	_pose_tween = create_tween()
-	_pose_tween.tween_property(
-		_emily, "scale", _emily_rest_scale * Vector3(1.04, 0.88, 1.04), 0.08
-	)
-	_pose_tween.parallel().tween_property(
-		_emily, "position:y", _emily_rest_y - 0.03, 0.08
-	)
-	_pose_tween.tween_property(
-		_emily, "scale", _emily_rest_scale, 0.18
-	)
-	_pose_tween.parallel().tween_property(
-		_emily, "position:y", _emily_rest_y, 0.18
-	)
-	_pose_tween.tween_callback(_play_idle_pose)
+	if _emily:
+		_emily.scale = _emily_rest_scale
+		_emily.position.y = _emily_rest_y
 
 
 func _base_score(trick_name: String) -> int:
 	match trick_name:
+		"grind":
+			return 150
 		"ollie":
 			return 100
 		"frontside_180", "backside_180", "backside_shuv":
@@ -308,6 +324,78 @@ func _base_score(trick_name: String) -> int:
 			return 500
 		_:
 			return 100
+
+
+
+## Air wish (WASD) upgrades ollie → named trick so Space+steer feels like skating.
+func _try_wish_air_upgrade() -> void:
+	if not _airborne_open or _active_trick != "ollie":
+		return
+	_air_elapsed += get_process_delta_time()
+	# Ignore hold-from-push for a beat so plain Space stays an ollie.
+	if _air_elapsed < 0.16:
+		return
+	var wish := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	if wish.length_squared() < 0.45:
+		return
+	if absf(wish.x) >= absf(wish.y):
+		_upgrade_air_trick("kickflip" if wish.x > 0.0 else "heelflip")
+	elif wish.y > 0.0:
+		_upgrade_air_trick("frontside_180")
+	else:
+		_upgrade_air_trick("backside_shuv")
+
+
+## Board.rotation.y only — Physics owns x (pitch) and z (lean).
+func _start_board_spin(trick_name: String) -> void:
+	if _board == null:
+		_board = get_parent().get_node_or_null("MeshPivot/Board") as MeshInstance3D
+	if _board == null:
+		return
+	var turns := 1.0
+	match trick_name:
+		"backside_shuv", "frontside_180", "backside_180":
+			turns = 0.5
+		"tre":
+			turns = 1.5
+		"kickflip", "heelflip":
+			turns = 1.0
+		_:
+			turns = 0.0
+	if turns <= 0.0:
+		return
+	var dir := -1.0 if trick_name in ["heelflip", "frontside_180"] else 1.0
+	_board_spin_y = 0.0
+	if _flip_tween and _flip_tween.is_valid():
+		_flip_tween.kill()
+	_flip_tween = create_tween()
+	_flip_tween.tween_method(_set_board_spin_y, 0.0, dir * turns * TAU, 0.35)
+
+
+func _set_board_spin_y(angle: float) -> void:
+	_board_spin_y = angle
+
+
+func _apply_board_spin(_delta: float) -> void:
+	if _board == null:
+		return
+	# Re-apply each frame so Physics pitch/lean lerps don't clear an unread y.
+	_board.rotation.y = _board_spin_y
+
+
+func _reset_board_spin() -> void:
+	if _flip_tween and _flip_tween.is_valid():
+		_flip_tween.kill()
+	_flip_tween = null
+	_board_spin_y = 0.0
+	if _board:
+		_board.rotation.y = 0.0
+
+
+func _land_toast(trick_name: String, gained: int) -> void:
+	var pretty := TrickClips.pretty_name(trick_name)
+	var msg := "+%d %s" % [gained, pretty]
+	get_tree().call_group("hud", "show_toast", msg)
 
 
 func _damp_secondary_for_catch() -> void:

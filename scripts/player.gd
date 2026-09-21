@@ -32,6 +32,7 @@ const SPEED_MPH_SCALE := 2.15  # game units → readable HUD mph
 
 @onready var mesh: Node3D = $MeshPivot
 @onready var board: MeshInstance3D = $MeshPivot/Board
+@onready var _emily: Node3D = get_node_or_null("MeshPivot/Emily") as Node3D
 @onready var rider: MeshInstance3D = $MeshPivot/Rider
 @onready var _tricks: Node = get_node_or_null("TrickSystem")
 @onready var _sfx_ollie: AudioStreamPlayer3D = get_node_or_null("SfxOllie")
@@ -241,7 +242,6 @@ func _on_landed(impact: float = 0.35) -> void:
 	velocity.z *= LAND_STICK
 	velocity.y = 0.0
 	_board_lean *= 0.3
-	_land_squash()
 	set_secondary_intensity(0.0)
 	_play_sfx_land(impact)
 	if _airborne and _active_air_trick != "":
@@ -250,6 +250,8 @@ func _on_landed(impact: float = 0.35) -> void:
 			_tricks.notify_trick_landed("")
 		_active_air_trick = ""
 	_airborne = false
+	# After TrickSystem land pose starts — overwrite with camera-readable squash on EmilyMesh/Board.
+	_land_squash()
 
 
 func _update_board_visuals(delta: float, on_surface: bool) -> void:
@@ -290,22 +292,48 @@ func _ollie_squash() -> void:
 
 
 func _land_squash() -> void:
-	## Big, camera-readable impact: Y squash + brief MeshPivot dip.
-	if mesh == null:
-		return
+	## Squash nodes the camera sees (EmilyMesh + Board). MeshPivot-only was invisible
+	## because TrickSystem AnimationPlayer / land pose drives Emily:scale.
 	if _land_tween and _land_tween.is_valid():
 		_land_tween.kill()
-	mesh.scale = Vector3.ONE
-	var base_y := mesh.position.y
+
+	var emily_mesh: Node3D = null
+	if _emily:
+		emily_mesh = _emily.get_node_or_null("EmilyMesh") as Node3D
+		if emily_mesh == null:
+			emily_mesh = _emily
+		# Stop TrickSystem pose fight for the impact window.
+		if _tricks and _tricks.has_method("suppress_pose_for_land"):
+			_tricks.call("suppress_pose_for_land", 0.45)
+		var anim := get_node_or_null("AnimationPlayer") as AnimationPlayer
+		if anim:
+			anim.stop()
+
+	var targets: Array[Node3D] = []
+	if emily_mesh:
+		targets.append(emily_mesh)
+	if board:
+		targets.append(board)
+	if targets.is_empty() and mesh:
+		targets.append(mesh)
+
 	_land_tween = create_tween()
 	_land_tween.set_parallel(true)
-	_land_tween.tween_property(mesh, "scale", Vector3(1.35, 0.42, 1.35), 0.07)
-	_land_tween.tween_property(mesh, "position:y", base_y - 0.22, 0.07)
+	for n in targets:
+		var base_y := n.position.y
+		var base_scale := n.scale
+		n.set_meta("land_base_y", base_y)
+		n.set_meta("land_base_scale", base_scale)
+		_land_tween.tween_property(n, "scale", base_scale * Vector3(1.45, 0.32, 1.45), 0.08)
+		_land_tween.tween_property(n, "position:y", base_y - 0.28, 0.08)
 	_land_tween.set_parallel(false)
-	_land_tween.tween_interval(0.04)
+	_land_tween.tween_interval(0.06)
 	_land_tween.set_parallel(true)
-	_land_tween.tween_property(mesh, "scale", Vector3.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_land_tween.tween_property(mesh, "position:y", base_y, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	for n in targets:
+		var base_y: float = n.get_meta("land_base_y")
+		var base_scale: Vector3 = n.get_meta("land_base_scale")
+		_land_tween.tween_property(n, "scale", base_scale, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_land_tween.tween_property(n, "position:y", base_y, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _play_sfx_ollie() -> void:
