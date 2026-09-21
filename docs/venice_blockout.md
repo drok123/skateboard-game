@@ -171,7 +171,8 @@ Build modular, collision-friendly primitives first:
 - Spawn + camera stay inside bounds.
 - Grindable edges tagged for Physics.
 
-## QA readability (post-5dba353 fail)
-- Bowls: **4 thick walls + dark floor + metal lip** (not 8 slab rings / coping spam).
-- Dropped third snake pocket — two snake bowls + one clover only.
-- Sand apron/berm warmer than deck so beach vs concrete separates in screenshot.
+## QA readability (post-8f83c61 fail)
+- Bowls: **dark pit cylinders + 4 inward BankQp transitions** (no vertical wall-slab rings).
+- Two snake bowls + one clover only; no hip filler boxes.
+- Orange sand apron vs cream deck; berm strips removed (read as edge slabs).
+- Fewer perimeter segments (`seg` 12 m) to cut white wall spam.

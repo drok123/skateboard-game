@@ -1,7 +1,7 @@
 extends Node3D
 ## Venice Beach skatepark blockout: street plaza SOUTH (−Z), bowl cluster NORTH (+Z).
 ## Orientation: Z+ = north. Simple bowls only (cylinder floor + 8 wall slabs + 4 coping).
-## Venice: bowls N / street S. QA pass: 4-wall bowls, warm sand, no shard rings.
+## Venice: bowls N / street S. QA2: dark pits + bank transitions, orange sand, fewer perimeter segs.
 
 const StairsSetScene := preload("res://scenes/parks/modules/stairs_set.tscn")
 const LedgeScene := preload("res://scenes/parks/modules/ledge.tscn")
@@ -15,10 +15,9 @@ const PlanterRoundScene := preload("res://scenes/parks/modules/planter_round.tsc
 const DECK_SIZE := Vector2(48.0, 40.0)
 const WALL_H := 1.1
 ## Stronger beach read vs white deck (QA readability).
-const COLOR_SAND_APRON := Color(0.92, 0.78, 0.52)
-const COLOR_SAND_BERM := Color(0.88, 0.70, 0.42)
-const COLOR_BOWL_FLOOR := Color(0.42, 0.46, 0.50)
-const COLOR_BOWL_WALL := Color(0.50, 0.54, 0.58)
+const COLOR_SAND_APRON := Color(0.95, 0.72, 0.38)
+const COLOR_BOWL_FLOOR := Color(0.28, 0.32, 0.36)
+const COLOR_DECK := Color(0.86, 0.84, 0.80)
 ## South street entrance, facing north (+Z) into the park.
 const SPAWN_POS := Vector3(-6.0, 1.2, -16.0)
 
@@ -57,36 +56,8 @@ func _build_sand_apron() -> void:
 		PackedStringArray(["out_of_bounds"])
 	)
 	# Thin sand berm just outside the wall ring (visual beach pile-up, still OOB).
-	_build_sand_berm()
+	# Berm skipped — edge box strips read as white slab clutter in QA.
 
-
-func _build_sand_berm() -> void:
-	var half_x := DECK_SIZE.x * 0.5 + 0.9  # just outside wall
-	var half_z := DECK_SIZE.y * 0.5 + 0.9
-	var berm_h := 0.22
-	var berm_y := -0.18  # sits above apron, below deck lip
-	var thick := 1.4
-	# Four berm strips around pad (gap on south entrance left open-ish).
-	var strips: Array = [
-		# North
-		[Vector3(DECK_SIZE.x + 2.0, berm_h, thick), Vector3(0.0, berm_y, half_z)],
-		# East
-		[Vector3(thick, berm_h, DECK_SIZE.y + 2.0), Vector3(half_x, berm_y, 0.0)],
-		# West
-		[Vector3(thick, berm_h, DECK_SIZE.y + 2.0), Vector3(-half_x, berm_y, 0.0)],
-		# South west of entrance gap
-		[Vector3(12.0, berm_h, thick), Vector3(-16.0, berm_y, -half_z)],
-		# South east of entrance gap
-		[Vector3(20.0, berm_h, thick), Vector3(10.0, berm_y, -half_z)],
-	]
-	for s in strips:
-		PropKit.add_box(
-			self,
-			s[0],
-			s[1],
-			COLOR_SAND_BERM,
-			PackedStringArray(["out_of_bounds"])
-		)
 
 
 func _build_deck_plates() -> void:
@@ -112,7 +83,7 @@ func _build_deck_plates() -> void:
 			self,
 			p[0],
 			p[1],
-			PropKit.COLOR_CONCRETE,
+			COLOR_DECK,
 			PackedStringArray(["deck"])
 		)
 
@@ -121,7 +92,7 @@ func _build_perimeter() -> void:
 	# Rounded-rect ring of wall segments. Gap on south for entrance near spawn.
 	var half_x := DECK_SIZE.x * 0.5  # 24
 	var half_z := DECK_SIZE.y * 0.5  # 20
-	var seg := 4.0
+	var seg := 12.0
 	# North wall (z = +half_z)
 	_wall_run(Vector3(0.0, 0.0, half_z), half_x * 2.0, 0.0, seg)
 	# East wall (x = +half_x)
@@ -274,25 +245,9 @@ func _build_snake_bowls() -> void:
 	var snake := Node3D.new()
 	snake.name = "SnakeBowls"
 	add_child(snake)
-	# Clean cylinder bowls (no pitched shard spam) — north cluster silhouette
+	# Two dark pits only — no wall-slab rings / hip filler boxes
 	_place_simple_bowl(snake, Vector3(-6.0, 0.0, 8.0), 4.5, 1.8)
 	_place_simple_bowl(snake, Vector3(1.0, 0.0, 10.0), 4.0, 2.1)
-	# Third smaller snake pocket (NW) — aerial read without rubble
-	PropKit.add_box(
-		snake,
-		Vector3(2.5, 0.35, 3.0),
-		Vector3(-2.5, -1.0, 9.0),
-		PropKit.COLOR_CONCRETE,
-		PackedStringArray(["bowl", "deck"])
-	)
-	# Hip deck between west bowls
-	PropKit.add_box(
-		snake,
-		Vector3(2.0, 0.3, 2.2),
-		Vector3(-9.0, -0.85, 10.5),
-		PropKit.COLOR_CONCRETE,
-		PackedStringArray(["bowl", "deck"])
-	)
 	var feed = BankQpScene.instantiate()
 	feed.name = "SnakeToCloverBank"
 	feed.width = 5.0
@@ -304,37 +259,47 @@ func _build_snake_bowls() -> void:
 
 
 func _place_simple_bowl(parent: Node3D, center: Vector3, radius: float, depth: float) -> void:
-	## QA-readable bowl: dark floor + 4 thick walls (not 8 shard slabs) + 4 metal lips.
+	## Dark pit + 4 inward banks — reads as a bowl hole, not a white slab ring.
 	PropKit.add_cylinder(
 		parent,
-		radius * 0.9,
-		0.4,
-		center + Vector3(0.0, -depth + 0.2, 0.0),
+		radius * 0.92,
+		0.45,
+		center + Vector3(0.0, -depth + 0.22, 0.0),
 		COLOR_BOWL_FLOOR,
 		PackedStringArray(["bowl", "deck"]),
-		20
+		24
 	)
-	# Four cardinal walls only — silhouette reads as a pool, not rubble.
-	var wall_n := 4
-	var chord := (TAU * radius) / float(wall_n) * 1.08
-	for i in range(wall_n):
-		var a := TAU * float(i) / float(wall_n)
-		PropKit.add_box(
-			parent,
-			Vector3(chord, depth, 0.85),
-			center + Vector3(sin(a) * radius, -depth * 0.5, -cos(a) * radius),
-			COLOR_BOWL_WALL,
-			PackedStringArray(["bowl", "deck"]),
-			Vector3(0.0, a, 0.0)
-		)
-	# Dark metal lip — defines bowl edge vs pale street deck
+	# Thick dark side pad under the banks so you don't fall through
+	PropKit.add_cylinder(
+		parent,
+		radius * 0.55,
+		depth * 0.85,
+		center + Vector3(0.0, -depth * 0.45, 0.0),
+		COLOR_BOWL_FLOOR,
+		PackedStringArray(["bowl", "deck"]),
+		16
+	)
+	var bank_w := maxf(radius * 1.15, 3.5)
+	var bank_h := minf(depth * 0.85, 2.2)
+	for i in range(4):
+		var a := TAU * float(i) / 4.0
+		var bank = BankQpScene.instantiate()
+		bank.name = "BowlBank_%d" % i
+		bank.width = bank_w
+		bank.height = bank_h
+		bank.angle_deg = 34.0
+		# Sit on rim; face inward (local +Z toward center)
+		bank.position = center + Vector3(sin(a) * (radius * 0.15), 0.0, -cos(a) * (radius * 0.15))
+		bank.rotation.y = a + PI  # slope toward bowl center
+		parent.add_child(bank)
+	# Single dark metal lip ring as 4 long edges (grindable)
 	for i in range(4):
 		var a := TAU * float(i) / 4.0 + PI * 0.25
 		PropKit.add_box(
 			parent,
-			Vector3((TAU * radius) / 4.0 * 0.9, 0.12, 0.28),
-			center + Vector3(sin(a) * radius, 0.06, -cos(a) * radius),
-			PropKit.COLOR_METAL,
+			Vector3((TAU * radius) / 4.0 * 0.95, 0.14, 0.22),
+			center + Vector3(sin(a) * radius, 0.07, -cos(a) * radius),
+			Color(0.25, 0.26, 0.28),
 			PackedStringArray(["grindable", "coping"]),
 			Vector3(0.0, a, 0.0)
 		)
