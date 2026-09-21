@@ -1,7 +1,7 @@
 extends Node3D
 ## Venice Beach skatepark blockout: street plaza SOUTH (−Z), bowl cluster NORTH (+Z).
 ## Orientation: Z+ = north. Simple bowls only (cylinder floor + 8 wall slabs + 4 coping).
-## Venice: bowls N / street S. QA2: dark pits + bank transitions, orange sand, fewer perimeter segs.
+## Venice: bowls N / street S. QA3: solid dark wells (no pale banks), deep orange sand.
 
 const StairsSetScene := preload("res://scenes/parks/modules/stairs_set.tscn")
 const LedgeScene := preload("res://scenes/parks/modules/ledge.tscn")
@@ -15,9 +15,10 @@ const PlanterRoundScene := preload("res://scenes/parks/modules/planter_round.tsc
 const DECK_SIZE := Vector2(48.0, 40.0)
 const WALL_H := 1.1
 ## Stronger beach read vs white deck (QA readability).
-const COLOR_SAND_APRON := Color(0.95, 0.72, 0.38)
-const COLOR_BOWL_FLOOR := Color(0.28, 0.32, 0.36)
-const COLOR_DECK := Color(0.86, 0.84, 0.80)
+const COLOR_SAND_APRON := Color(0.98, 0.68, 0.28)
+const COLOR_BOWL_FLOOR := Color(0.18, 0.22, 0.26)
+const COLOR_BOWL_WELL := Color(0.22, 0.26, 0.30)
+const COLOR_DECK := Color(0.90, 0.88, 0.84)
 ## South street entrance, facing north (+Z) into the park.
 const SPAWN_POS := Vector3(-6.0, 1.2, -16.0)
 
@@ -259,47 +260,38 @@ func _build_snake_bowls() -> void:
 
 
 func _place_simple_bowl(parent: Node3D, center: Vector3, radius: float, depth: float) -> void:
-	## Dark pit + 4 inward banks — reads as a bowl hole, not a white slab ring.
+	## Open dark bowl (skate. read): cream deck hole + charcoal floor/walls — never pale slabs.
+	# Floor at bottom of the pit
 	PropKit.add_cylinder(
 		parent,
-		radius * 0.92,
-		0.45,
-		center + Vector3(0.0, -depth + 0.22, 0.0),
+		radius * 0.9,
+		0.35,
+		center + Vector3(0.0, -depth + 0.18, 0.0),
 		COLOR_BOWL_FLOOR,
 		PackedStringArray(["bowl", "deck"]),
 		24
 	)
-	# Thick dark side pad under the banks so you don't fall through
-	PropKit.add_cylinder(
-		parent,
-		radius * 0.55,
-		depth * 0.85,
-		center + Vector3(0.0, -depth * 0.45, 0.0),
-		COLOR_BOWL_FLOOR,
-		PackedStringArray(["bowl", "deck"]),
-		16
-	)
-	var bank_w := maxf(radius * 1.15, 3.5)
-	var bank_h := minf(depth * 0.85, 2.2)
-	for i in range(4):
-		var a := TAU * float(i) / 4.0
-		var bank = BankQpScene.instantiate()
-		bank.name = "BowlBank_%d" % i
-		bank.width = bank_w
-		bank.height = bank_h
-		bank.angle_deg = 34.0
-		# Sit on rim; face inward (local +Z toward center)
-		bank.position = center + Vector3(sin(a) * (radius * 0.15), 0.0, -cos(a) * (radius * 0.15))
-		bank.rotation.y = a + PI  # slope toward bowl center
-		parent.add_child(bank)
-	# Single dark metal lip ring as 4 long edges (grindable)
+	# 4 thick DARK walls only (charcoal — not PropKit pale concrete)
+	var wall_n := 4
+	var chord := (TAU * radius) / float(wall_n) * 1.06
+	for i in range(wall_n):
+		var a := TAU * float(i) / float(wall_n)
+		PropKit.add_box(
+			parent,
+			Vector3(chord, depth, 0.9),
+			center + Vector3(sin(a) * radius, -depth * 0.5, -cos(a) * radius),
+			COLOR_BOWL_WELL,
+			PackedStringArray(["bowl", "deck"]),
+			Vector3(0.0, a, 0.0)
+		)
+	# Near-black coping lip
 	for i in range(4):
 		var a := TAU * float(i) / 4.0 + PI * 0.25
 		PropKit.add_box(
 			parent,
-			Vector3((TAU * radius) / 4.0 * 0.95, 0.14, 0.22),
-			center + Vector3(sin(a) * radius, 0.07, -cos(a) * radius),
-			Color(0.25, 0.26, 0.28),
+			Vector3((TAU * radius) / 4.0 * 0.92, 0.1, 0.18),
+			center + Vector3(sin(a) * radius, 0.05, -cos(a) * radius),
+			Color(0.1, 0.1, 0.12),
 			PackedStringArray(["grindable", "coping"]),
 			Vector3(0.0, a, 0.0)
 		)
