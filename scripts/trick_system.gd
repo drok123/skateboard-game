@@ -32,6 +32,10 @@ var _air_elapsed := 0.0
 
 
 func _ready() -> void:
+	var body := get_parent()
+	if body and body.has_signal("grind_started"):
+		if not body.grind_started.is_connected(_on_parent_grind_started):
+			body.grind_started.connect(_on_parent_grind_started)
 	_anim = get_parent().get_node_or_null("AnimationPlayer") as AnimationPlayer
 	if _anim == null:
 		_anim = AnimationPlayer.new()
@@ -171,15 +175,100 @@ func play_locomotion(clip_name: String) -> void:
 		_play_clip(clip_name)
 
 
+
+func _on_parent_grind_started() -> void:
+	# Backup if Physics emitted grind_started but skipped notify (race / old path).
+	if _active_trick == "grind":
+		return
+	notify_grind_started("")
+
+
 func notify_trick_started(trick_name: String = "ollie") -> void:
+	# Named grind path — Physics may still call this with "grind" / rail keys.
+	if trick_name == "grind" or trick_name in ["flatbar", "stairs_hubba", "ledge", "Flatbar", "StairsA", "LongLedge", "Ledge"]:
+		notify_grind_started(trick_name if trick_name != "grind" else "")
+		return
 	_active_trick = trick_name
 	_air_elapsed = 0.0
-	# Grind is on-rail — toast only, no air wish upgrades / flip spin.
-	_airborne_open = trick_name != "grind"
+	_airborne_open = true
 	trick_started.emit(trick_name)
 	_play_clip(trick_name)
 	if trick_name == "ollie":
 		_play_ollie_pose()
+
+
+
+## Physics grind enter — toast Flatbar / StairsA / LongLedge when known.
+func notify_grind_started(rail_name: String = "") -> void:
+	_active_trick = "grind"
+	_airborne_open = false
+	_air_elapsed = 0.0
+	var label := rail_name.strip_edges()
+	if label == "":
+		label = _resolve_nearby_street_rail()
+	label = _toast_rail_label(label)
+	_play_clip("grind")
+	var toast := "Grind" if label == "" else "Grind — %s" % label
+	# Exact QA strings (bypass HUD capitalize). Also emit for combo listeners.
+	trick_started.emit("grind")
+	var tree := get_tree()
+	if tree:
+		tree.call_group("hud", "show_toast", toast)
+
+
+
+func _toast_rail_label(raw: String) -> String:
+	var key := raw.strip_edges()
+	if key == "":
+		return ""
+	var lower := key.to_lower().replace(" ", "_")
+	match lower:
+		"flatbar", "flat_bar":
+			return "Flatbar"
+		"stairsa", "stairs_a", "stairs_hubba", "hubba":
+			return "StairsA"
+		"longledge", "long_ledge":
+			return "LongLedge"
+		"ledge":
+			return "Ledge"
+		"grind":
+			return ""
+		_:
+			# Already Flatbar / StairsA / etc.
+			for want in ["Flatbar", "StairsA", "Ledge", "LongLedge"]:
+				if key == want or key.begins_with(want):
+					return want
+			return key
+
+
+func _resolve_nearby_street_rail() -> String:
+	var body := get_parent() as Node3D
+	if body == null:
+		return ""
+	var best := ""
+	var best_d := 2.0
+	for node in get_tree().get_nodes_in_group("grindable"):
+		if not (node is Node3D):
+			continue
+		var n3 := node as Node3D
+		var label := ""
+		var walk: Node = n3
+		while walk:
+			var ns := String(walk.name)
+			for want in ["Flatbar", "StairsA", "Ledge", "LongLedge"]:
+				if ns == want or ns.begins_with(want):
+					label = want
+					break
+			if label != "":
+				break
+			walk = walk.get_parent()
+		if label == "":
+			continue
+		var d: float = body.global_position.distance_to(n3.global_position)
+		if d < best_d:
+			best_d = d
+			best = label
+	return best
 
 
 func notify_trick_landed(trick_name: String = "") -> void:

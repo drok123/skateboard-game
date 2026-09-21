@@ -25,14 +25,14 @@ const MAX_FALL := -40.0
 const LAND_STICK := 0.62
 const CARVE_LEAN_MAX := 0.52
 const SECONDARY_RECOVER_RATE := 1.8
-const GRIND_MIN_SPEED := 2.4
+const GRIND_MIN_SPEED := 1.6
 const GRIND_FRICTION := 0.7
 const GRIND_SNAP := 28.0
 const GRIND_OLLIE_BOOST := 3.0
-const GRIND_MIN_NORMAL_Y := 0.45  # top-face only — no side sink
+const GRIND_MIN_NORMAL_Y := 0.22  # allow thin-bar edge tops; still reject walls
 const GRIND_FOOT_CLEAR := 0.04
 const STREET_RAIL_NAMES := ["Flatbar", "StairsA", "Ledge", "LongLedge"]
-const GRIND_PROXIMITY := 1.85
+const GRIND_PROXIMITY := 2.75
 const SPEED_MPH_SCALE := 2.15  # game units → readable HUD mph
 
 @onready var mesh: Node3D = $MeshPivot
@@ -235,10 +235,12 @@ func _update_grind_state() -> void:
 			grind_started.emit()
 			_play_sfx_grind_start()
 			var rail := str(hit.get("rail", ""))
+			if rail == "":
+				rail = _street_rail_label(hit.get("collider") as Node) if hit.get("collider") else ""
 			if _tricks and _tricks.has_method("notify_grind_started"):
 				_tricks.notify_grind_started(rail)
 			elif _tricks and _tricks.has_method("notify_trick_started"):
-				_tricks.notify_trick_started("grind")
+				_tricks.notify_trick_started("grind" if rail == "" else rail)
 			global_position.y = target_y
 		else:
 			global_position.y = lerpf(global_position.y, target_y, 0.55)
@@ -293,39 +295,77 @@ func _street_rail_label(node: Node) -> String:
 
 func _find_grind_by_proximity() -> Dictionary:
 	var speed := Vector3(velocity.x, 0.0, velocity.z).length()
-	if speed < GRIND_MIN_SPEED * 0.55:
+	if speed < GRIND_MIN_SPEED * 0.45:
 		return {}
 	var best: Node3D = null
 	var best_d := GRIND_PROXIMITY
+	var best_top := Vector3.ZERO
 	for node in get_tree().get_nodes_in_group("grindable"):
 		if not (node is Node3D):
 			continue
 		if _street_rail_label(node) == "":
 			continue
 		var n3 := node as Node3D
-		var d := Vector3(
-			global_position.x - n3.global_position.x,
-			0.0,
-			global_position.z - n3.global_position.z
-		).length()
-		var dy := absf(global_position.y - n3.global_position.y)
-		if d < best_d and dy < 1.15:
+		var closest := _closest_grind_point(n3)
+		var d: float = closest["d"]
+		var top: Vector3 = closest["top"]
+		if d < best_d:
 			best_d = d
 			best = n3
+			best_top = top
 	if best == null:
 		return {}
 	var forward := Vector3(velocity.x, 0.0, velocity.z)
 	if forward.length_squared() < 0.01:
 		forward = Vector3(sin(_facing), 0.0, cos(_facing))
 	forward = forward.normalized()
-	# Synthetic top point so foot clear sits on bar height.
-	var top := best.global_position + Vector3(0.0, 0.45, 0.0)
 	return {
 		"axis": forward,
-		"point": top,
+		"point": best_top,
 		"normal": Vector3.UP,
 		"rail": _street_rail_label(best),
 	}
+
+
+## Closest point on grindable box collision (handles long Flatbar ends).
+func _closest_grind_point(n3: Node3D) -> Dictionary:
+	var best_d := INF
+	var best_top := n3.global_position + Vector3(0.0, 0.45, 0.0)
+	var found := false
+	for cs in n3.find_children("*", "CollisionShape3D", true, false):
+		if not (cs is CollisionShape3D):
+			continue
+		var shape_node := cs as CollisionShape3D
+		if shape_node.shape == null or not (shape_node.shape is BoxShape3D):
+			continue
+		var box := shape_node.shape as BoxShape3D
+		var xf := shape_node.global_transform
+		var local := xf.affine_inverse() * global_position
+		var half := box.size * 0.5
+		var clamped := Vector3(
+			clampf(local.x, -half.x, half.x),
+			clampf(local.y, -half.y, half.y),
+			clampf(local.z, -half.z, half.z)
+		)
+		var world := xf * clamped
+		var d := Vector3(global_position.x - world.x, 0.0, global_position.z - world.z).length()
+		var dy := absf(global_position.y - world.y)
+		if dy > 1.35:
+			continue
+		if d < best_d:
+			best_d = d
+			# Top of box in world space.
+			var top_local := Vector3(clamped.x, half.y, clamped.z)
+			best_top = xf * top_local
+			found = true
+	if not found:
+		var d0 := Vector3(
+			global_position.x - n3.global_position.x,
+			0.0,
+			global_position.z - n3.global_position.z
+		).length()
+		return {"d": d0, "top": best_top}
+	return {"d": best_d, "top": best_top}
 
 
 func _do_ollie(from_grind: bool = false) -> void:
