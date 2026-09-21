@@ -37,8 +37,9 @@ func apply_punch(strength: float, duration: float = 0.22) -> void:
 	_punch_fov_add = 14.0 * strength
 	var tw := create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(self, "_punch_offset", Vector3.ZERO, duration).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "_punch_fov_add", 0.0, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	# Weightier settle (Session-like) — less springy than BACK.
+	tw.tween_property(self, "_punch_offset", Vector3.ZERO, duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "_punch_fov_add", 0.0, duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
 func _physics_process(delta: float) -> void:

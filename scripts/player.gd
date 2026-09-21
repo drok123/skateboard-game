@@ -15,13 +15,13 @@ const FRICTION := 5.5
 const BRAKE_FRICTION := 16.0
 const TURN_SPEED := 3.1
 const TURN_SPEED_FAST := 4.8
-const JUMP_VELOCITY := 10.5
-const OLLIE_FORWARD_BOOST := 2.4
+const JUMP_VELOCITY := 9.8
+const OLLIE_FORWARD_BOOST := 2.8
 const AIR_CONTROL := 0.32
 const AIR_TURN := 1.9
-const GRAVITY := 20.0
-const MAX_FALL := -34.0
-const LAND_STICK := 0.72
+const GRAVITY := 26.0
+const MAX_FALL := -40.0
+const LAND_STICK := 0.62
 const CARVE_LEAN_MAX := 0.42
 const SECONDARY_RECOVER_RATE := 1.8
 const GRIND_MIN_SPEED := 3.5
@@ -307,7 +307,7 @@ func _land_squash(impact: float = 0.5) -> void:
 	if cam == null:
 		cam = get_viewport().get_camera_3d()
 	if cam and cam.has_method("apply_punch"):
-		cam.call("apply_punch", clampf(0.85 + impact * 0.65, 0.85, 1.5), 0.28)
+		cam.call("apply_punch", clampf(1.0 + impact * 0.8, 1.0, 1.6), 0.36)
 
 	if mesh == null:
 		return
@@ -320,13 +320,13 @@ func _land_squash(impact: float = 0.5) -> void:
 	mesh.scale = Vector3.ONE
 	_land_tween = create_tween()
 	_land_tween.set_parallel(true)
-	_land_tween.tween_property(mesh, "scale", Vector3(1.55, 0.28, 1.55), 0.09)
-	_land_tween.tween_property(mesh, "position:y", base_y - 0.38, 0.09)
+	_land_tween.tween_property(mesh, "scale", Vector3(1.65, 0.22, 1.65), 0.1)
+	_land_tween.tween_property(mesh, "position:y", base_y - 0.45, 0.1)
 	if board:
 		_land_tween.tween_property(board, "scale", board_base_scale * Vector3(1.2, 0.35, 1.2), 0.09)
 		_land_tween.tween_property(board, "position:y", board_base_y - 0.06, 0.09)
 	_land_tween.set_parallel(false)
-	_land_tween.tween_interval(0.12)
+	_land_tween.tween_interval(0.16)
 	_land_tween.set_parallel(true)
 	_land_tween.tween_property(mesh, "scale", Vector3.ONE, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_land_tween.tween_property(mesh, "position:y", base_y, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
