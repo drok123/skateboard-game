@@ -25,6 +25,7 @@ var _emily: Node3D
 var _emily_rest_scale := Vector3.ONE
 var _emily_rest_y := 0.0
 var _airborne_open := false
+var _grind_toast_sent := false
 var _board: MeshInstance3D
 var _flip_tween: Tween
 var _board_spin_y := 0.0
@@ -33,9 +34,9 @@ var _air_elapsed := 0.0
 
 func _ready() -> void:
 	var body := get_parent()
-	if body and body.has_signal("grind_started"):
-		if not body.grind_started.is_connected(_on_parent_grind_started):
-			body.grind_started.connect(_on_parent_grind_started)
+	if body and body.has_signal("grind_ended"):
+		if not body.grind_ended.is_connected(notify_grind_ended):
+			body.grind_ended.connect(notify_grind_ended)
 	_anim = get_parent().get_node_or_null("AnimationPlayer") as AnimationPlayer
 	if _anim == null:
 		_anim = AnimationPlayer.new()
@@ -176,13 +177,6 @@ func play_locomotion(clip_name: String) -> void:
 
 
 
-func _on_parent_grind_started() -> void:
-	# Backup if Physics emitted grind_started but skipped notify (race / old path).
-	if _active_trick == "grind":
-		return
-	notify_grind_started("")
-
-
 func notify_trick_started(trick_name: String = "ollie") -> void:
 	# Named grind path — Physics may still call this with "grind" / rail keys.
 	if trick_name == "grind" or trick_name in ["flatbar", "stairs_hubba", "ledge", "Flatbar", "StairsA", "LongLedge", "Ledge"]:
@@ -191,6 +185,7 @@ func notify_trick_started(trick_name: String = "ollie") -> void:
 	_active_trick = trick_name
 	_air_elapsed = 0.0
 	_airborne_open = true
+	_grind_toast_sent = false
 	trick_started.emit(trick_name)
 	_play_clip(trick_name)
 	if trick_name == "ollie":
@@ -200,20 +195,29 @@ func notify_trick_started(trick_name: String = "ollie") -> void:
 
 ## Physics grind enter — toast Flatbar / StairsA / LongLedge when known.
 func notify_grind_started(rail_name: String = "") -> void:
-	_active_trick = "grind"
-	_airborne_open = false
-	_air_elapsed = 0.0
+	# Physics owns lock enter and calls this once per lock. One toast only.
+	if _grind_toast_sent and _active_trick == "grind":
+		return
 	var label := rail_name.strip_edges()
 	if label == "":
 		label = _resolve_nearby_street_rail()
 	label = _toast_rail_label(label)
+	# Last resort: still show Grind so QA sees feedback even if label miss.
+	var toast := "Grind — %s" % label if label != "" else "Grind"
+	_active_trick = "grind"
+	_airborne_open = false
+	_air_elapsed = 0.0
+	_grind_toast_sent = true
 	_play_clip("grind")
-	var toast := "Grind" if label == "" else "Grind — %s" % label
-	# Exact QA strings (bypass HUD capitalize). Also emit for combo listeners.
-	trick_started.emit("grind")
-	var tree := get_tree()
-	if tree:
-		tree.call_group("hud", "show_toast", toast)
+	# Physics owns grind HUD toast + juice punch on lock enter (G1 / Audio sync).
+	# Emit toast string for combo listeners; do not call_group again (double toast).
+	trick_started.emit(toast)
+
+
+func notify_grind_ended() -> void:
+	if _active_trick == "grind":
+		_active_trick = ""
+	_grind_toast_sent = false
 
 
 
@@ -246,7 +250,7 @@ func _resolve_nearby_street_rail() -> String:
 	if body == null:
 		return ""
 	var best := ""
-	var best_d := 2.0
+	var best_d := 3.5
 	for node in get_tree().get_nodes_in_group("grindable"):
 		if not (node is Node3D):
 			continue
@@ -276,6 +280,7 @@ func notify_trick_landed(trick_name: String = "") -> void:
 	if name == "":
 		name = "ollie"
 	_airborne_open = false
+	_grind_toast_sent = false
 	_play_clip("land")
 	_play_land_pose()
 	if _combo_timer > 0.0:
@@ -296,6 +301,7 @@ func notify_trick_landed(trick_name: String = "") -> void:
 
 func notify_bailed() -> void:
 	_airborne_open = false
+	_grind_toast_sent = false
 	_active_trick = ""
 	_combo_mult = 1
 	_combo_score = 0

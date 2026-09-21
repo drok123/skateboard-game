@@ -183,6 +183,9 @@ func _try_connect_trick_system() -> void:
 
 func _pretty_trick_name(trick_name: String) -> String:
 	## underscores → spaces, capitalize words (kickflip → Kickflip, frontside_180 → Frontside 180).
+	# Pass through QA grind labels already formatted by TrickSystem.
+	if trick_name.begins_with("Grind") or " — " in trick_name:
+		return trick_name
 	return trick_name.capitalize()
 
 

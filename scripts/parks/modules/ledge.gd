@@ -32,7 +32,7 @@ func _rebuild() -> void:
 	)
 	PropKit.add_box(
 		self,
-		Vector3(length, 0.12, depth * 0.9),
+		Vector3(length, 0.22, depth * 0.95),  # fatter grind lip for detect
 		Vector3(0.0, body_h + 0.06, 0.0),
 		PropKit.COLOR_METAL,
 		PackedStringArray(["grindable"])

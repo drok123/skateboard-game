@@ -240,9 +240,7 @@ func _update_grind_state() -> void:
 			var rail := str(hit.get("rail", ""))
 			if rail == "" and hit.get("collider") is Node:
 				rail = _street_rail_label(hit.get("collider") as Node)
-			if rail == "":
-				rail = _street_rail_label(hit.get("collider") as Node) if hit.get("collider") is Node else ""
-			# Own toast until G1 PASS — Tricks also notified for combo/clips.
+			# Physics owns grind toast + juice punch; notify Tricks for combo/clips.
 			var toast := "Grind" if rail == "" else "Grind — %s" % rail
 			get_tree().call_group("hud", "show_toast", toast)
 			# skate. lock-in punch — same frame as grind toast + SFX.
@@ -335,14 +333,11 @@ func _find_grind_by_proximity() -> Dictionary:
 	if forward.length_squared() < 0.01:
 		forward = Vector3(sin(_facing), 0.0, cos(_facing))
 	forward = forward.normalized()
-	var rail := _street_rail_label(best)
-	if rail == "":
-		rail = "Flatbar"  # last resort label so QA sees Grind toast
 	return {
 		"axis": forward,
 		"point": best_top,
 		"normal": Vector3.UP,
-		"rail": rail,
+		"rail": _street_rail_label(best),
 		"collider": best,
 	}
 

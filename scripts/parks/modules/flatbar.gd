@@ -22,7 +22,7 @@ func _rebuild() -> void:
 	# Bar along +X, grindable.
 	PropKit.add_box(
 		self,
-		Vector3(length, maxf(bar_size, 0.16), maxf(bar_size, 0.16)),
+		Vector3(length, maxf(bar_size, 0.28), maxf(bar_size, 0.28)),  # fatter for G1 detect
 		Vector3(0.0, height, 0.0),
 		PropKit.COLOR_METAL,
 		PackedStringArray(["grindable"])
