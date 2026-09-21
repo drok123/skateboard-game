@@ -1,61 +1,70 @@
-[gd_scene load_steps=6 format=3 uid="uid://bskatehud001"]
+[gd_scene load_steps=7 format=3 uid="uid://bskatehud001"]
 
 [ext_resource type="Script" path="res://scripts/hud.gd" id="1_hud"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_panel"]
-bg_color = Color(0.14, 0.12, 0.1, 0.78)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.35, 0.3, 0.24, 0.9)
+bg_color = Color(0.14, 0.12, 0.1, 0.72)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.32, 0.28, 0.22, 0.85)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+content_margin_left = 2
+content_margin_top = 2
+content_margin_right = 2
+content_margin_bottom = 2
+shadow_color = Color(0.05, 0.04, 0.03, 0.35)
+shadow_size = 3
+shadow_offset = Vector2(0, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_toast"]
+bg_color = Color(0.12, 0.1, 0.08, 0.82)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.72, 0.58, 0.42, 0.7)
 corner_radius_top_left = 6
 corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
-content_margin_left = 4
+content_margin_left = 6
 content_margin_top = 4
-content_margin_right = 4
+content_margin_right = 6
 content_margin_bottom = 4
 shadow_color = Color(0.05, 0.04, 0.03, 0.45)
 shadow_size = 4
 shadow_offset = Vector2(0, 2)
 
-[sub_resource type="StyleBoxFlat" id="StyleBox_toast"]
-bg_color = Color(0.12, 0.1, 0.08, 0.85)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.55, 0.42, 0.28, 0.95)
-corner_radius_top_left = 8
-corner_radius_top_right = 8
-corner_radius_bottom_right = 8
-corner_radius_bottom_left = 8
-content_margin_left = 8
-content_margin_top = 6
-content_margin_right = 8
-content_margin_bottom = 6
-shadow_color = Color(0.05, 0.04, 0.03, 0.55)
-shadow_size = 6
-shadow_offset = Vector2(0, 3)
-
 [sub_resource type="LabelSettings" id="LabelSettings_hud"]
-font_size = 20
+font_size = 18
 font_color = Color(0.96, 0.93, 0.86, 1)
-outline_size = 5
+outline_size = 4
 outline_color = Color(0.08, 0.07, 0.05, 1)
-shadow_size = 2
-shadow_color = Color(0, 0, 0, 0.55)
+shadow_size = 1
+shadow_color = Color(0, 0, 0, 0.45)
+shadow_offset = Vector2(1, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_hint"]
+font_size = 14
+font_color = Color(0.9, 0.86, 0.78, 0.85)
+outline_size = 3
+outline_color = Color(0.08, 0.07, 0.05, 0.9)
+shadow_size = 1
+shadow_color = Color(0, 0, 0, 0.35)
 shadow_offset = Vector2(1, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_toast"]
-font_size = 36
+font_size = 42
 font_color = Color(0.98, 0.94, 0.86, 1)
-outline_size = 8
-outline_color = Color(0.08, 0.06, 0.04, 1)
-shadow_size = 3
-shadow_color = Color(0, 0, 0, 0.6)
+outline_size = 10
+outline_color = Color(0.06, 0.05, 0.03, 1)
+shadow_size = 2
+shadow_color = Color(0, 0, 0, 0.55)
 shadow_offset = Vector2(1, 2)
 
 [node name="HUD" type="CanvasLayer"]
@@ -68,18 +77,18 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 20
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
 
 [node name="Root" type="VBoxContainer" parent="Margin"]
 layout_mode = 2
-theme_override_constants/separation = 12
+theme_override_constants/separation = 8
 
 [node name="TopRow" type="HBoxContainer" parent="Margin/Root"]
 layout_mode = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 12
 
 [node name="SpeedPanel" type="PanelContainer" parent="Margin/Root/TopRow"]
 layout_mode = 2
@@ -87,14 +96,14 @@ theme_override_styles/panel = SubResource("StyleBox_panel")
 
 [node name="SpeedMargin" type="MarginContainer" parent="Margin/Root/TopRow/SpeedPanel"]
 layout_mode = 2
-theme_override_constants/margin_left = 14
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 14
-theme_override_constants/margin_bottom = 8
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 5
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 5
 
 [node name="SpeedLabel" type="Label" parent="Margin/Root/TopRow/SpeedPanel/SpeedMargin"]
 layout_mode = 2
-text = "SPEED  0.0"
+text = "0 mph"
 label_settings = SubResource("LabelSettings_hud")
 
 [node name="Spacer" type="Control" parent="Margin/Root/TopRow"]
@@ -102,22 +111,22 @@ layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="ComboPanel" type="PanelContainer" parent="Margin/Root/TopRow"]
+visible = false
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBox_panel")
 
 [node name="ComboMargin" type="MarginContainer" parent="Margin/Root/TopRow/ComboPanel"]
 layout_mode = 2
-theme_override_constants/margin_left = 14
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 14
-theme_override_constants/margin_bottom = 8
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 5
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 5
 
 [node name="ComboLabel" type="Label" parent="Margin/Root/TopRow/ComboPanel/ComboMargin"]
 layout_mode = 2
-text = "COMBO  0"
+text = "x2"
 label_settings = SubResource("LabelSettings_hud")
 horizontal_alignment = 2
-
 
 [node name="GoalRow" type="HBoxContainer" parent="Margin/Root"]
 layout_mode = 2
@@ -130,10 +139,10 @@ theme_override_styles/panel = SubResource("StyleBox_panel")
 
 [node name="GoalMargin" type="MarginContainer" parent="Margin/Root/GoalRow/GoalPanel"]
 layout_mode = 2
-theme_override_constants/margin_left = 14
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 14
-theme_override_constants/margin_bottom = 8
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 5
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 5
 
 [node name="GoalLabel" type="Label" parent="Margin/Root/GoalRow/GoalPanel/GoalMargin"]
 layout_mode = 2
@@ -157,10 +166,10 @@ theme_override_styles/panel = SubResource("StyleBox_toast")
 
 [node name="ToastMargin" type="MarginContainer" parent="Margin/Root/ToastAnchor/ToastPanel"]
 layout_mode = 2
-theme_override_constants/margin_left = 28
-theme_override_constants/margin_top = 12
-theme_override_constants/margin_right = 28
-theme_override_constants/margin_bottom = 12
+theme_override_constants/margin_left = 22
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 22
+theme_override_constants/margin_bottom = 8
 
 [node name="ToastLabel" type="Label" parent="Margin/Root/ToastAnchor/ToastPanel/ToastMargin"]
 layout_mode = 2
@@ -178,18 +187,16 @@ theme_override_styles/panel = SubResource("StyleBox_panel")
 
 [node name="HintMargin" type="MarginContainer" parent="Margin/Root/HintRow/HintPanel"]
 layout_mode = 2
-theme_override_constants/margin_left = 16
-theme_override_constants/margin_top = 10
-theme_override_constants/margin_right = 16
-theme_override_constants/margin_bottom = 10
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 6
 
 [node name="HintLabel" type="Label" parent="Margin/Root/HintRow/HintPanel/HintMargin"]
 layout_mode = 2
-text = "WASD / Arrows — move    Space — ollie
-(H to hide)"
-label_settings = SubResource("LabelSettings_hud")
+text = "WASD — move · Space — ollie · H hide"
+label_settings = SubResource("LabelSettings_hint")
 horizontal_alignment = 1
-
 
 [node name="PauseOverlay" type="Control" parent="."]
 visible = false
@@ -226,14 +233,14 @@ theme_override_styles/panel = SubResource("StyleBox_panel")
 
 [node name="PauseMargin" type="MarginContainer" parent="PauseOverlay/Center/PausePanel"]
 layout_mode = 2
-theme_override_constants/margin_left = 28
-theme_override_constants/margin_top = 24
-theme_override_constants/margin_right = 28
-theme_override_constants/margin_bottom = 24
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
 
 [node name="VBox" type="VBoxContainer" parent="PauseOverlay/Center/PausePanel/PauseMargin"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 12
 
 [node name="PauseTitle" type="Label" parent="PauseOverlay/Center/PausePanel/PauseMargin/VBox"]
 layout_mode = 2
@@ -242,11 +249,11 @@ label_settings = SubResource("LabelSettings_hud")
 horizontal_alignment = 1
 
 [node name="ResumeButton" type="Button" parent="PauseOverlay/Center/PausePanel/PauseMargin/VBox"]
-custom_minimum_size = Vector2(0, 44)
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 text = "RESUME"
 
 [node name="QuitButton" type="Button" parent="PauseOverlay/Center/PausePanel/PauseMargin/VBox"]
-custom_minimum_size = Vector2(0, 44)
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 text = "QUIT"

@@ -8,12 +8,15 @@ signal controls_hint_dismissed()
 
 @export var player_path: NodePath = NodePath("../Player")
 @export var hint_grace_sec: float = 0.75
-@export var toast_hold_sec: float = 0.9
-@export var toast_fade_sec: float = 0.4
+@export var toast_hold_sec: float = 0.7
+@export var toast_fade_sec: float = 0.25
+@export var toast_punch_scale: float = 1.06
+@export var toast_punch_sec: float = 0.08
 
 var combo: int = 0
 
 @onready var _speed_label: Label = $Margin/Root/TopRow/SpeedPanel/SpeedMargin/SpeedLabel
+@onready var _combo_panel: PanelContainer = $Margin/Root/TopRow/ComboPanel
 @onready var _combo_label: Label = $Margin/Root/TopRow/ComboPanel/ComboMargin/ComboLabel
 @onready var _goal_label: Label = $Margin/Root/GoalRow/GoalPanel/GoalMargin/GoalLabel
 @onready var _toast_label: Label = $Margin/Root/ToastAnchor/ToastPanel/ToastMargin/ToastLabel
@@ -38,6 +41,9 @@ func _ready() -> void:
 	_resume_button.pressed.connect(_resume_game)
 	_quit_button.pressed.connect(_quit_game)
 	_toast_panel.modulate.a = 0.0
+	_toast_panel.scale = Vector2.ONE
+	_toast_panel.resized.connect(_center_toast_pivot)
+	_center_toast_pivot()
 	_toast_label.text = ""
 	_set_combo_label(0)
 	set_objective("Warm-up street — Push the plaza")
@@ -54,6 +60,10 @@ func _process(_delta: float) -> void:
 	_try_dismiss_hint_from_play()
 
 
+func _center_toast_pivot() -> void:
+	_toast_panel.pivot_offset = _toast_panel.size * 0.5
+
+
 func show_toast(text: String) -> void:
 	## Public API — show a fading trick-name toast (lower third).
 	if text.is_empty():
@@ -62,8 +72,15 @@ func show_toast(text: String) -> void:
 	toast_shown.emit(text)
 	if _toast_tween and _toast_tween.is_valid():
 		_toast_tween.kill()
+	# Keep punch centered even before first layout pass.
+	_toast_panel.pivot_offset = _toast_panel.size * 0.5
 	_toast_panel.modulate.a = 1.0
+	_toast_panel.scale = Vector2.ONE
 	_toast_tween = create_tween()
+	_toast_tween.set_parallel(true)
+	_toast_tween.tween_property(_toast_panel, "scale", Vector2.ONE * toast_punch_scale, toast_punch_sec).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_toast_tween.set_parallel(false)
+	_toast_tween.tween_property(_toast_panel, "scale", Vector2.ONE, toast_punch_sec).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_toast_tween.tween_interval(toast_hold_sec)
 	_toast_tween.tween_property(_toast_panel, "modulate:a", 0.0, toast_fade_sec)
 
@@ -155,11 +172,17 @@ func _update_speed() -> void:
 	if _player:
 		var h := Vector3(_player.velocity.x, 0.0, _player.velocity.z)
 		speed = h.length()
-	_speed_label.text = "SPEED  %.1f" % speed
+	# Compact integer mph-style readout (game units ≈ mph for playtest).
+	_speed_label.text = "%d mph" % int(round(speed))
 
 
 func _set_combo_label(value: int) -> void:
-	_combo_label.text = "COMBO  %d" % value
+	if _combo_panel:
+		_combo_panel.visible = value > 0
+	if value > 0:
+		_combo_label.text = "x%d" % value
+	else:
+		_combo_label.text = ""
 
 
 func _on_hint_grace_done() -> void:
