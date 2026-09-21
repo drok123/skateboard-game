@@ -1,20 +1,24 @@
 extends Node3D
 ## Venice Beach skatepark blockout: street plaza SOUTH (−Z), bowl cluster NORTH (+Z).
 ## Orientation: Z+ = north. Simple bowls only (cylinder floor + 8 wall slabs + 4 coping).
-## Aerial-fidelity pass: wider sand berm, denser south plaza, third snake pocket.
+## Venice: bowls N / street S. QA pass: 4-wall bowls, warm sand, no shard rings.
 
 const StairsSetScene := preload("res://scenes/parks/modules/stairs_set.tscn")
 const LedgeScene := preload("res://scenes/parks/modules/ledge.tscn")
 const FlatbarScene := preload("res://scenes/parks/modules/flatbar.tscn")
 const ManualPadScene := preload("res://scenes/parks/modules/manual_pad.tscn")
 const BankQpScene := preload("res://scenes/parks/modules/bank_qp.tscn")
-const CopingEdgeScene := preload("res://scenes/parks/modules/coping_edge.tscn")
 const PerimeterWallScene := preload("res://scenes/parks/modules/perimeter_wall.tscn")
 const PlanterRoundScene := preload("res://scenes/parks/modules/planter_round.tscn")
 
 ## Playable concrete pad (X × Z). Deck top at Y = 0.
 const DECK_SIZE := Vector2(48.0, 40.0)
 const WALL_H := 1.1
+## Stronger beach read vs white deck (QA readability).
+const COLOR_SAND_APRON := Color(0.92, 0.78, 0.52)
+const COLOR_SAND_BERM := Color(0.88, 0.70, 0.42)
+const COLOR_BOWL_FLOOR := Color(0.42, 0.46, 0.50)
+const COLOR_BOWL_WALL := Color(0.50, 0.54, 0.58)
 ## South street entrance, facing north (+Z) into the park.
 const SPAWN_POS := Vector3(-6.0, 1.2, -16.0)
 
@@ -49,7 +53,7 @@ func _build_sand_apron() -> void:
 		self,
 		Vector3(DECK_SIZE.x + 24.0, 0.28, DECK_SIZE.y + 24.0),
 		Vector3(0.0, -0.42, 0.0),
-		PropKit.COLOR_SAND,
+		COLOR_SAND_APRON,
 		PackedStringArray(["out_of_bounds"])
 	)
 	# Thin sand berm just outside the wall ring (visual beach pile-up, still OOB).
@@ -80,7 +84,7 @@ func _build_sand_berm() -> void:
 			self,
 			s[0],
 			s[1],
-			PropKit.COLOR_SAND,
+			COLOR_SAND_BERM,
 			PackedStringArray(["out_of_bounds"])
 		)
 
@@ -274,7 +278,6 @@ func _build_snake_bowls() -> void:
 	_place_simple_bowl(snake, Vector3(-6.0, 0.0, 8.0), 4.5, 1.8)
 	_place_simple_bowl(snake, Vector3(1.0, 0.0, 10.0), 4.0, 2.1)
 	# Third smaller snake pocket (NW) — aerial read without rubble
-	_place_simple_bowl(snake, Vector3(-12.0, 0.0, 12.5), 3.2, 1.5)
 	PropKit.add_box(
 		snake,
 		Vector3(2.5, 0.35, 3.0),
@@ -301,35 +304,40 @@ func _build_snake_bowls() -> void:
 
 
 func _place_simple_bowl(parent: Node3D, center: Vector3, radius: float, depth: float) -> void:
-	## Readable bowl: floor disc + 8 thick wall slabs + 4 coping. No bowl_segment shards.
+	## QA-readable bowl: dark floor + 4 thick walls (not 8 shard slabs) + 4 metal lips.
 	PropKit.add_cylinder(
 		parent,
-		radius * 0.88,
-		0.35,
-		center + Vector3(0.0, -depth + 0.15, 0.0),
-		PropKit.COLOR_CONCRETE_COOL,
+		radius * 0.9,
+		0.4,
+		center + Vector3(0.0, -depth + 0.2, 0.0),
+		COLOR_BOWL_FLOOR,
 		PackedStringArray(["bowl", "deck"]),
-		16
+		20
 	)
-	var wall_n := 8
-	var chord := (TAU * radius) / float(wall_n) * 1.05
+	# Four cardinal walls only — silhouette reads as a pool, not rubble.
+	var wall_n := 4
+	var chord := (TAU * radius) / float(wall_n) * 1.08
 	for i in range(wall_n):
 		var a := TAU * float(i) / float(wall_n)
 		PropKit.add_box(
 			parent,
-			Vector3(chord, depth, 0.55),
+			Vector3(chord, depth, 0.85),
 			center + Vector3(sin(a) * radius, -depth * 0.5, -cos(a) * radius),
-			PropKit.COLOR_CONCRETE_COOL,
+			COLOR_BOWL_WALL,
 			PackedStringArray(["bowl", "deck"]),
 			Vector3(0.0, a, 0.0)
 		)
+	# Dark metal lip — defines bowl edge vs pale street deck
 	for i in range(4):
 		var a := TAU * float(i) / 4.0 + PI * 0.25
-		var c = CopingEdgeScene.instantiate()
-		c.length = (TAU * radius) / 4.0 * 0.85
-		c.position = center + Vector3(sin(a) * radius, 0.0, -cos(a) * radius)
-		c.rotation.y = a
-		parent.add_child(c)
+		PropKit.add_box(
+			parent,
+			Vector3((TAU * radius) / 4.0 * 0.9, 0.12, 0.28),
+			center + Vector3(sin(a) * radius, 0.06, -cos(a) * radius),
+			PropKit.COLOR_METAL,
+			PackedStringArray(["grindable", "coping"]),
+			Vector3(0.0, a, 0.0)
+		)
 
 
 func _build_clover_bowl() -> void:
@@ -338,7 +346,7 @@ func _build_clover_bowl() -> void:
 	add_child(clover)
 	var center := Vector3(8.0, 0.0, 11.0)
 	# Hero bowl — slightly larger for aerial silhouette; still one clean cylinder
-	_place_simple_bowl(clover, center, 6.5, 3.0)
+	_place_simple_bowl(clover, center, 5.5, 2.8)
 	var hip = BankQpScene.instantiate()
 	hip.name = "CloverHip"
 	hip.width = 4.5
@@ -382,7 +390,7 @@ func _build_palms() -> void:
 
 func _build_zones() -> void:
 	# Mission Flow Area3D volumes — group name == node name (names kept exact).
-	# Nudged: zone_snake west for third pocket; zone_clover for larger hero radius.
+	# zone_snake / zone_clover cover north bowls; street south.
 	_add_zone("zone_street", Vector3(0.0, 2.0, -10.0), Vector3(42.0, 6.0, 20.0))
 	_add_zone("zone_snake", Vector3(-5.0, 0.0, 10.0), Vector3(20.0, 8.0, 16.0))
 	_add_zone("zone_clover", Vector3(8.0, -0.5, 11.0), Vector3(17.0, 8.0, 15.0))

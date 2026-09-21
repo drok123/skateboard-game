@@ -170,3 +170,8 @@ Build modular, collision-friendly primitives first:
 - Player can push street, drop a bowl, and return without falling through.
 - Spawn + camera stay inside bounds.
 - Grindable edges tagged for Physics.
+
+## QA readability (post-5dba353 fail)
+- Bowls: **4 thick walls + dark floor + metal lip** (not 8 slab rings / coping spam).
+- Dropped third snake pocket — two snake bowls + one clover only.
+- Sand apron/berm warmer than deck so beach vs concrete separates in screenshot.
