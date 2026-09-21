@@ -1,5 +1,6 @@
 extends Node
-## Board-relative keyboard controls and a standard gamepad fallback.
+## Board-relative controls. Left stick only carves; face buttons push/brake so
+## throttle never fights steering. Right stick remains reserved for tricks.
 
 @onready var _body: CharacterBody3D = get_parent() as CharacterBody3D
 var _pad_jump_held := false
@@ -18,11 +19,14 @@ func _physics_process(delta: float) -> void:
 	if not pads.is_empty():
 		var device := pads[0]
 		var stick_x := Input.get_joy_axis(device, JOY_AXIS_LEFT_X)
-		var stick_y := Input.get_joy_axis(device, JOY_AXIS_LEFT_Y)
-		if absf(stick_x) > 0.18:
-			steer = signf(stick_x) * (absf(stick_x) - 0.18) / 0.82
-		push = maxf(push, maxf(0.0, (-stick_y - 0.18) / 0.82))
-		brake = maxf(brake, maxf(0.0, (stick_y - 0.18) / 0.82))
+		steer = _shaped_axis(stick_x)
+		# Xbox labels: X pushes, B foot-brakes/reverses, A pops. The left
+		# trigger adds analog braking without claiming either trick stick.
+		push = maxf(push, 1.0 if Input.is_joy_button_pressed(device, JOY_BUTTON_X) else 0.0)
+		brake = maxf(brake, 1.0 if Input.is_joy_button_pressed(device, JOY_BUTTON_B) else 0.0)
+		var trigger := Input.get_joy_axis(device, JOY_AXIS_TRIGGER_LEFT)
+		if trigger > 0.05:
+			brake = maxf(brake, trigger)
 		pad_jump = Input.is_joy_button_pressed(device, JOY_BUTTON_A)
 		reset_pressed = reset_pressed or Input.is_joy_button_pressed(device, JOY_BUTTON_BACK)
 	if reset_pressed and not _reset_held:
@@ -31,3 +35,12 @@ func _physics_process(delta: float) -> void:
 	var jump_pressed := Input.is_action_just_pressed("jump") or (pad_jump and not _pad_jump_held)
 	_pad_jump_held = pad_jump
 	_body.apply_riding_input(steer, push, brake, jump_pressed, delta)
+
+
+func _shaped_axis(value: float) -> float:
+	const DEADZONE := 0.16
+	if absf(value) <= DEADZONE:
+		return 0.0
+	var normalized := (absf(value) - DEADZONE) / (1.0 - DEADZONE)
+	# Softer around center for line corrections, full authority at the edge.
+	return signf(value) * pow(normalized, 1.35)

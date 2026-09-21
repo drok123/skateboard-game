@@ -194,7 +194,7 @@ theme_override_constants/margin_bottom = 6
 
 [node name="HintLabel" type="Label" parent="Margin/Root/HintRow/HintPanel/HintMargin"]
 layout_mode = 2
-text = "W push | S brake | A / D carve | Space pop\nAir: J / K flips | U / I spins | O shuv | P tre\nPad: left stick ride | A pop | right stick air tricks\nR / Pad Back respawn | Esc pause | H toggle help"
+text = "W push | S brake/reverse | A / D carve | Space pop\nAir: J / K flips | U / I spins | O shuv | P tre\nPad: left stick carve | X push | B/LT brake | A pop | right stick air tricks\nR / Pad Back respawn | Esc pause | H toggle help"
 label_settings = SubResource("LabelSettings_hint")
 horizontal_alignment = 1
 

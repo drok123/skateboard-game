@@ -6,12 +6,18 @@ signal sfx_ollie()
 signal sfx_land(impact: float)
 signal grind_started()
 signal grind_ended()
+signal push_stroke(power: float)
+signal riding_input_changed(steer: float, pushing: bool, brake: float)
 
 # Riding values use metres and seconds.
-const MAX_SPEED := 16.0
-const PUSH_ACCEL := 8.5
-const FRICTION := 0.55
-const BRAKE_FRICTION := 16.0
+const MAX_SPEED := 12.0
+const PUSH_CYCLE_SECONDS := 0.72
+const PUSH_IMPULSE := 2.85
+const PUSH_IMPULSE_AT_MAX_SPEED := 0.28
+const FRICTION := 0.38
+const BRAKE_FRICTION := 9.5
+const REVERSE_SPEED := 2.2
+const REVERSE_ACCEL := 4.0
 const JUMP_VELOCITY := 7.2
 const OLLIE_FORWARD_BOOST := 0.0
 const AIR_TURN := 1.35
@@ -62,6 +68,12 @@ var _board_rest_scale := Vector3.ONE
 var _board_pitch := 0.0
 var _spawn_position := Vector3.ZERO
 var _pop_tween: Tween
+var _push_phase := 0.0
+var _push_was_down := false
+var _push_power := 0.0
+var _steer_input := 0.0
+var _brake_input := 0.0
+var _signed_speed := 0.0
 
 
 func _ready() -> void:
@@ -90,6 +102,10 @@ func apply_riding_input(steer: float, push: float, brake: float, jump_pressed: b
 	steer = clampf(steer, -1.0, 1.0)
 	push = clampf(push, 0.0, 1.0)
 	brake = clampf(brake, 0.0, 1.0)
+	_steer_input = steer
+	_brake_input = brake
+	_update_push_cycle(push, delta)
+	riding_input_changed.emit(steer, push > 0.05, brake)
 	var on_floor := is_on_floor()
 	_grind_cooldown = maxf(0.0, _grind_cooldown - delta)
 	_jump_buffer = 0.12 if jump_pressed else maxf(0.0, _jump_buffer - delta)
@@ -112,20 +128,42 @@ func apply_riding_input(steer: float, push: float, brake: float, jump_pressed: b
 	if _grinding:
 		horizontal = _grind_move(horizontal, Vector3.ZERO, delta)
 	else:
-		var turn_rate := lerpf(2.4, 1.15, clampf(speed / MAX_SPEED, 0.0, 1.0)) if grounded else AIR_TURN
-		_facing = wrapf(_facing - steer * turn_rate * delta, -PI, PI)
+		var forward := get_facing_forward()
+		var forward_speed := horizontal.dot(forward)
+		var speed_abs := absf(forward_speed)
+		var steer_authority := clampf((speed_abs - 0.25) / 1.8, 0.0, 1.0)
+		var turn_rate := lerpf(1.75, 0.8, clampf(speed_abs / MAX_SPEED, 0.0, 1.0)) if grounded else AIR_TURN
+		var reverse_sign := -1.0 if forward_speed < -0.05 else 1.0
+		_facing = wrapf(_facing - steer * turn_rate * steer_authority * reverse_sign * delta, -PI, PI)
 		if grounded:
-			# Grip redirects momentum without adding sideways acceleration.
-			var forward := get_facing_forward()
-			horizontal = horizontal.lerp(forward * speed, 1.0 - exp(-10.0 * delta))
-			var drag := FRICTION + speed * speed * 0.004 + absf(steer) * speed * 0.035
-			speed = maxf(0.0, horizontal.length() - (drag + brake * BRAKE_FRICTION) * delta)
-			if brake < 0.1:
-				speed = minf(MAX_SPEED, speed + PUSH_ACCEL * push * (1.0 - 0.65 * speed / MAX_SPEED) * delta)
-			horizontal = horizontal.normalized() * speed if horizontal.length_squared() > 0.001 else forward * speed
+			# Rebuild from the freshly-carved heading. Grip removes sideways drift while
+			# preserving signed momentum, including predictable low-speed reverse.
+			forward = get_facing_forward()
+			forward_speed = horizontal.dot(forward)
+			forward_speed = move_toward(forward_speed, 0.0, FRICTION * delta)
+			if brake > 0.05:
+				if forward_speed > 0.3:
+					forward_speed = move_toward(forward_speed, 0.0, BRAKE_FRICTION * brake * delta)
+				else:
+					forward_speed = move_toward(forward_speed, -REVERSE_SPEED, REVERSE_ACCEL * brake * delta)
+			var push_power := _consume_push_stroke()
+			if push_power > 0.0 and brake < 0.1:
+				if forward_speed < 0.0:
+					# A forward push cleanly changes direction instead of consuming a
+					# whole animation cycle merely to cancel a tiny reverse roll.
+					forward_speed = minf(MAX_SPEED, forward_speed + PUSH_IMPULSE * push_power)
+				else:
+					var speed_ratio := clampf(forward_speed / MAX_SPEED, 0.0, 1.0)
+					var impulse_scale := lerpf(1.0, PUSH_IMPULSE_AT_MAX_SPEED, speed_ratio)
+					forward_speed = minf(MAX_SPEED, forward_speed + PUSH_IMPULSE * impulse_scale * push_power)
+				push_stroke.emit(push_power)
+			horizontal = forward * forward_speed
 			# Gravity along banks adds downhill speed and makes uphill lines cost momentum.
 			var downhill := Vector3.DOWN.slide(get_floor_normal()) * GRAVITY
 			horizontal += Vector3(downhill.x, 0.0, downhill.z) * delta
+			_signed_speed = forward_speed
+		else:
+			_signed_speed = horizontal.dot(forward)
 		# In air, body yaw changes without steering the ballistic trajectory.
 		var lean_target := steer * CARVE_LEAN_MAX * clampf(speed / 6.0, 0.0, 1.0) if grounded else 0.0
 		_board_lean = lerpf(_board_lean, lean_target, 1.0 - exp(-10.0 * delta))
@@ -191,6 +229,50 @@ func get_horizontal_speed() -> float:
 func get_speed_mph() -> float:
 	## HUD-facing speed so playtest never reads as a dead 0 while rolling.
 	return get_horizontal_speed() * SPEED_MPH_SCALE
+
+
+func get_push_phase() -> float:
+	return _push_phase
+
+
+func is_pushing() -> bool:
+	return _push_was_down
+
+
+func get_steer_input() -> float:
+	return _steer_input
+
+
+func get_brake_input() -> float:
+	return _brake_input
+
+
+func get_signed_speed() -> float:
+	return _signed_speed
+
+
+func _update_push_cycle(push: float, delta: float) -> void:
+	var pushing := push > 0.05 and is_on_floor() and not _grinding
+	if not pushing:
+		_push_phase = 0.0
+		_push_was_down = false
+		_push_power = 0.0
+		return
+	_push_power = push
+	if not _push_was_down:
+		# A tap always gives one responsive stroke. Holding repeats at a readable
+		# foot cadence for keyboard and controller accessibility.
+		_push_phase = 1.0
+		_push_was_down = true
+		return
+	_push_phase += delta / PUSH_CYCLE_SECONDS
+
+
+func _consume_push_stroke() -> float:
+	if not _push_was_down or _push_phase < 1.0:
+		return 0.0
+	_push_phase = fmod(_push_phase, 1.0)
+	return _push_power
 
 
 
@@ -676,6 +758,12 @@ func reset_to_spawn() -> void:
 	_facing = 0.0
 	_board_lean = 0.0
 	_board_pitch = 0.0
+	_push_phase = 0.0
+	_push_was_down = false
+	_push_power = 0.0
+	_steer_input = 0.0
+	_brake_input = 0.0
+	_signed_speed = 0.0
 	_jump_buffer = 0.0
 	_coyote_time = 0.0
 	_airborne = false

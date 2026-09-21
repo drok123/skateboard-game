@@ -13,6 +13,8 @@ const TPOSE_GLB := "res://assets/characters/emily_skater.glb"
 const BOARD_SOCKET_NAME := "BoardSocket"
 const MESH_NAME := "EmilyMesh"
 
+signal rig_ready(skeleton: Skeleton3D)
+
 ## Deck top in MeshPivot space (Board center + half thickness).
 @export var deck_top_y := 0.14
 @export var sole_sink := 0.02
@@ -90,9 +92,10 @@ func _deck_half_thickness(board: MeshInstance3D) -> float:
 func _load_emily() -> void:
 	# Drop previous mesh only — keep BoardSocket marker across hot-reload.
 	for child in get_children():
-		if child.name == BOARD_SOCKET_NAME:
-			continue
-		child.queue_free()
+		# Runtime reload owns only the imported GLB. Keep authored helpers such as
+		# ProceduralAnimator and the persistent deck-contact marker alive.
+		if child.name == MESH_NAME:
+			child.queue_free()
 	skeleton = null
 
 	var path := SKINNED_GLB if FileAccess.file_exists(SKINNED_GLB) or ResourceLoader.exists(SKINNED_GLB) else STANCE_GLB
@@ -115,8 +118,7 @@ func _load_emily() -> void:
 
 	skeleton = _find_skeleton(root)
 	if skeleton:
-		# Future: bone-based feet / BoardSocket attach. Unskinned path stays AABB.
-		pass
+		rig_ready.emit(skeleton)
 
 	var aabb := _mesh_aabb(root)
 	if aabb.size == Vector3.ZERO:

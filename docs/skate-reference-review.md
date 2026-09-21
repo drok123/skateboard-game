@@ -4,7 +4,7 @@ Repository: https://github.com/drok123/skateboard-game
 Base commit: ae4229810c0eba8d4ded46b9e7c921ed584b5c0f
 Date: 2026-09-21
 
-Three agents worked on riding/physics, tricks/scoring, and camera/HUD. Integration also corrected objective false positives and character material compatibility.
+Two coordinated three-agent passes covered riding/tricks/camera, followed by controls, rider animation and the Venice park. Integration also corrected objective false positives and character material compatibility.
 
 ## Reference and scope
 
@@ -23,20 +23,23 @@ EA describes skate. around analog gestures and physics-driven skating: https://w
 | HUD | Discarded point totals; help vanished permanently | Line points, landing/bail feedback, H-toggle help and pause focus |
 | Recovery | No quick retry | R/controller Back respawn and below-world recovery |
 | Objectives | Nearby rails and fast rolling passes could count | Actual street grind required; stair attempt must include airborne travel |
+| Push controls | Held input behaved like a constant motor | Immediate foot stroke plus a readable repeat cadence; controller throttle is separated from steering |
+| Rider | Rigid mannequin pose with weak deck contact | 18-bone procedural cruise/push/carve/pop/tuck/catch/land/grind poses with deck foot IK |
+| Venice park | Separate boxes and dark cylindrical pits | One continuous concrete heightfield with kidney, snake, hero bowl, transfer island, coping and aerial-matched street landmarks |
 
 ## Verification
 
-Godot 4.7.2 was used for import, scripted regression tests, and a 300-frame main-scene headless smoke run. The persistent test suite contains 19 gameplay assertions and three camera checks. A real OpenGL render was also inspected. The sandbox reports a Windows root-certificate-store error unrelated to offline gameplay; the expanded test teardown also reports ObjectDB leaks, which need investigation before treating this as a clean long-session memory validation.
+Godot 4.7.2 was used for import, scripted regression tests, and a 300-frame main-scene headless smoke run. The persistent suites contain 23 gameplay assertions, three camera checks, 18 rider rig/pose assertions and 14 Venice geometry/mission checks. OpenGL rider and aerial park renders were inspected. The sandbox reports a Windows root-certificate-store error unrelated to offline gameplay.
 
 The automated tests do not replace hands-on controller tuning or the existing five-minute playability checklist. No claim of a complete five-minute manual skate session is made.
 
 ## Next priorities
 
-1. Replace procedural scale/yaw poses with authored crouch, push, pop, catch and landing animations, foot/board IK, and true body rotations. The current 180s remain board-only visuals.
+1. Reweight or replace Emily's source rig. It has 18 bones, no toe bones and crude proximity weights, which limits the new procedural animation and IK.
 2. Implement grounded right-stick preload/flick pop gestures and analog catch control. Current right-stick gestures choose air tricks after the A-button pop.
 3. Improve transition contact, slope-aligned board/rider poses, pumping, ledge entry and grind balance; add manuals and grabs.
-4. Add a real bail/recovery state. An uncaught flip currently clears the line and reduces speed rather than simulating a ragdoll.
-5. Replace the park blockout with coherent materials and detailed assets, then tune lighting, sound variation, and replay tools.
+4. Add full-body 180 rotations and a real bail/recovery state. An uncaught flip currently clears the line instead of entering a ragdoll.
+5. Replace remaining primitive street furniture and palms with detailed original assets; add sound variation and replay tools.
 6. Tighten goal geometry: airborne travel is now required for the stair goal, but direction, full obstacle clearance, and clean landing need stronger spatial validation.
 
 A commercial Skate-scale open world and animation system require substantial further development. The included project is a playable foundation pass, not a finished equivalent.

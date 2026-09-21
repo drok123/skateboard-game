@@ -10,8 +10,8 @@ Import `project.godot` in Godot 4.2 or newer and press F5. This improvement pass
 
 | Action | Keyboard | Controller |
 | --- | --- | --- |
-| Push | W / Up | Left stick up |
-| Brake | S / Down | Left stick down |
+| Push | W / Up | X / west face button |
+| Brake / reverse | S / Down | B / east face button or left trigger |
 | Carve | A/D or Left/Right | Left stick left/right |
 | Ollie | Space (press) | A / bottom face button |
 | Kickflip / heelflip in air | J / K | Right stick right / left |
@@ -21,7 +21,7 @@ Import `project.godot` in Godot 4.2 or newer and press F5. This improvement pass
 | Show/hide controls | H | Keyboard only |
 | Pause | Escape | Standard cancel action |
 
-Release push to coast. Steering is relative to the board. Ollies preserve forward momentum; they do not add free speed. After takeoff, make a fresh trick input and leave enough airtime to complete it. Only one named trick can be committed per airtime. Right-stick gestures currently upgrade an ollie; they do not perform the full Skate-style ground pop gesture.
+Tap push for one strong foot stroke or hold it for repeated strokes; release it to coast. Steering is relative to the board and becomes more stable at speed. Hold brake to stop, then continue holding to roll backward at walking pace. Ollies preserve forward momentum; they do not add free speed. After takeoff, make a fresh trick input and leave enough airtime to complete it. Only one named trick can be committed per airtime. Right-stick gestures currently upgrade an ollie; they do not perform the full Skate-style ground pop gesture.
 
 Approach rails near their top and along their length. A sustained grind scores on exit. Consecutive landings build a line multiplier; repeated tricks earn less. Late, uncaught flips reset the line. R resets the rider and line for another attempt.
 
@@ -32,12 +32,16 @@ After the editor has imported assets:
 ```sh
 godot --headless --path . --script tools/test_gameplay.gd
 godot --headless --path . --script tools/test_camera.gd
+godot --headless --path . --script tools/test_emily_animation.gd
+godot --headless --path . --script tools/test_venice_park.gd
 ```
 
-The gameplay regression checks acceleration, coasting, braking, ollie momentum, landing, combo expiration, committed tricks, incomplete-flip scoring, grind scoring, and actual-grind objective detection. The camera regression checks obstruction, clear following, and teleport recovery.
+The suites cover push cadence, coasting, braking/reverse, ollie momentum, landing, tricks, grind scoring, camera obstruction, the 18-bone rider poses and foot contact, Venice surface depths, landmarks, and mission zones.
 
 ## Current limits
 
-This pass improves the existing prototype rather than reproducing a commercial game. Full-body 180s, foot/board IK, richer push/catch animations, ragdoll bails, manuals, grabs, a complete stick-gesture control scheme, and deeper transition physics remain future work. The 180 inputs currently animate the board; they are not a full-body spin simulation. A bail currently clears scoring rather than entering a ragdoll state.
+This pass improves the existing prototype rather than reproducing a commercial game. Emily now has procedural bone-level cruise, push, carve, pop, tuck, catch, land and grind motion plus deck foot IK. Her source GLB has only 18 bones, no toes and crude proximity weights, so deformation remains more rigid than a production character. Full-body 180s, ragdoll bails, manuals, grabs, a complete ground-to-air stick gesture system and deeper transition physics remain future work.
+
+The animation timing, control ideas and continuous Venice surface were adapted from the user's private `drok123/skater-test` repository. No commercial animation clips or extracted game assets are included.
 
 See `docs/skate-reference-review.md` for the review, changes, and next priorities.
