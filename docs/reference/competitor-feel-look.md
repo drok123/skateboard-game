@@ -43,6 +43,13 @@ Sister note: `docs/reference/session-feel-ref.md` (Session clip Derron called ou
 
 **Owners:** Core Feel (pop/carve readability), World (plaza flow, vertical transitions later), Art (silhouette at distance, sunny readability).
 
+### P0 — Turning & camera (Derron 2026-09-21)
+**skate. is the bar for turn + follow cam** (not Session twin-stick weight for this lane).
+- Follow cam: behind-board, yaw with velocity/facing (not stuck or orbit-laggy), gentle look-ahead into turns.
+- Turning: stick carve feels continuous like Flick-It arcs — responsive at low speed, stable at high; no sudden snap or mushy delay.
+- Owners: **Player Controller** (input→facing + cam), **Skate Physics** (carve/yaw coupling). Cite skate. trailers above when tuning `follow_camera.gd` / turn rates in `player.gd`.
+
+
 **What we do *not* take:** San Vansterdam layout, Flick-It IP, cosmetics, live-ops UI, parkour scope for beta.
 
 ---
@@ -69,6 +76,7 @@ Sister note: `docs/reference/session-feel-ref.md` (Session clip Derron called ou
 |---------|-------------|--------|
 | Board weight / land | Session settle | Floaty THPS bounce |
 | Trick clarity at speed | skate. / XL readable pops | Tiny unreadable flicks |
+| Turning + follow camera | **skate.** behind-board carve cam | Session twin-stick / stuck orbit lag |
 | Park teaching | XL simple line parks + Venice aerial | Maximalist city clutter |
 | Look | Sunny Venice + Emily identity | Neon cyber, muddy gray rider |
 | Juice | Session-like impact honesty | Particle carnival |
