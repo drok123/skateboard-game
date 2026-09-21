@@ -9,6 +9,8 @@ signal controls_hint_dismissed()
 @export var player_path: NodePath = NodePath("../Player")
 @export var hint_grace_sec: float = 0.75
 @export var toast_hold_sec: float = 0.7
+@export var toast_grind_hold_sec: float = 1.0
+@export var toast_debounce_sec: float = 0.35
 @export var toast_fade_sec: float = 0.25
 @export var toast_punch_scale: float = 1.06
 @export var toast_punch_sec: float = 0.08
@@ -30,6 +32,8 @@ var _player: Node
 var _trick_system: Node
 var _tricks_connected: bool = false
 var _toast_tween: Tween
+var _last_toast_text: String = ""
+var _last_toast_msec: int = -999999
 var _hint_grace_done: bool = false
 var _hint_dismissed: bool = false
 var _last_pos: Vector3 = Vector3.ZERO
@@ -75,20 +79,30 @@ func show_toast(text: String) -> void:
 	## Public API — show a fading trick-name toast (lower third).
 	if text.is_empty():
 		return
-	_toast_label.text = text
-	toast_shown.emit(text)
+	var pretty := _format_toast_text(text)
+	if pretty.is_empty():
+		return
+	# Debounce Physics + Tricks double-fire of the same grind/trick callout.
+	var now_msec := Time.get_ticks_msec()
+	if pretty == _last_toast_text and (now_msec - _last_toast_msec) < int(toast_debounce_sec * 1000.0):
+		return
+	_last_toast_text = pretty
+	_last_toast_msec = now_msec
+	_toast_label.text = pretty
+	toast_shown.emit(pretty)
 	if _toast_tween and _toast_tween.is_valid():
 		_toast_tween.kill()
 	# Keep punch centered even before first layout pass.
 	_toast_panel.pivot_offset = _toast_panel.size * 0.5
 	_toast_panel.modulate.a = 1.0
 	_toast_panel.scale = Vector2.ONE
+	var hold := toast_grind_hold_sec if _is_grind_toast(pretty) else toast_hold_sec
 	_toast_tween = create_tween()
 	_toast_tween.set_parallel(true)
 	_toast_tween.tween_property(_toast_panel, "scale", Vector2.ONE * toast_punch_scale, toast_punch_sec).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_toast_tween.set_parallel(false)
 	_toast_tween.tween_property(_toast_panel, "scale", Vector2.ONE, toast_punch_sec).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_toast_tween.tween_interval(toast_hold_sec)
+	_toast_tween.tween_interval(hold)
 	_toast_tween.tween_property(_toast_panel, "modulate:a", 0.0, toast_fade_sec)
 
 
@@ -181,21 +195,75 @@ func _try_connect_trick_system() -> void:
 	_tricks_connected = true
 
 
+func _format_toast_text(raw: String) -> String:
+	## Skate-readable callout. Pass through Grind — Name; map rail keys; title-case trick ids.
+	var t := raw.strip_edges()
+	if t.is_empty():
+		return ""
+	# Already pretty (Physics / TrickSystem QA strings).
+	if t.begins_with("Grind") or " — " in t:
+		return t
+	var rail := _mapped_rail_name(t)
+	if rail != "":
+		return "Grind — %s" % rail
+	return _pretty_trick_name(t)
+
+
 func _pretty_trick_name(trick_name: String) -> String:
 	## underscores → spaces, capitalize words (kickflip → Kickflip, frontside_180 → Frontside 180).
-	# Pass through QA grind labels already formatted by TrickSystem.
-	if trick_name.begins_with("Grind") or " — " in trick_name:
-		return trick_name
-	return trick_name.capitalize()
+	var t := trick_name.strip_edges()
+	if t.is_empty():
+		return ""
+	# Pass through QA grind labels already formatted by TrickSystem / Physics.
+	if t.begins_with("Grind") or " — " in t:
+		return t
+	var rail := _mapped_rail_name(t)
+	if rail != "":
+		return rail
+	return t.capitalize()
+
+
+func _mapped_rail_name(raw: String) -> String:
+	## flatbar→Flatbar, stairs_hubba/StairsA→StairsA, long_ledge/LongLedge→LongLedge, ledge→Ledge.
+	var key := raw.strip_edges()
+	if key.is_empty():
+		return ""
+	var lower := key.to_lower().replace(" ", "_")
+	match lower:
+		"flatbar", "flat_bar":
+			return "Flatbar"
+		"stairsa", "stairs_a", "stairs_hubba", "hubba":
+			return "StairsA"
+		"longledge", "long_ledge":
+			return "LongLedge"
+		"ledge":
+			return "Ledge"
+		_:
+			for want in ["Flatbar", "StairsA", "LongLedge", "Ledge"]:
+				if key == want or key.begins_with(want):
+					return want
+			return ""
+
+
+func _is_grind_toast(text: String) -> bool:
+	return text.begins_with("Grind") or _mapped_rail_name(text) != ""
 
 
 func _on_trick_started(trick_name: String) -> void:
-	show_toast(_pretty_trick_name(trick_name))
+	# If TrickSystem already emitted Grind — Flatbar, show_toast passes it through.
+	show_toast(trick_name)
 
 
 func _on_trick_landed(trick_name: String, _score: int) -> void:
-	var pretty := _pretty_trick_name(trick_name) if trick_name != "" else "Land"
-	show_toast("%s — Landed" % pretty)
+	if trick_name.is_empty():
+		show_toast("Land")
+		return
+	# Avoid "Grind — Flatbar — Landed" double em-dash; landings use pretty trick name.
+	var pretty := _pretty_trick_name(trick_name)
+	if pretty.begins_with("Grind"):
+		show_toast(pretty)
+	else:
+		show_toast("%s — Landed" % pretty)
 
 
 func _on_trick_combo_changed(multiplier: int, _total_score: int) -> void:

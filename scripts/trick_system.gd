@@ -195,7 +195,8 @@ func notify_trick_started(trick_name: String = "ollie") -> void:
 
 ## Physics grind enter — toast Flatbar / StairsA / LongLedge when known.
 func notify_grind_started(rail_name: String = "") -> void:
-	# Physics owns lock enter and calls this once per lock. One toast only.
+	# Physics owns lock enter toast + juice; emit pretty grind for HUD/combo listeners.
+	# HUD debounces identical Physics call_group + signal double-fire (~0.35s).
 	if _grind_toast_sent and _active_trick == "grind":
 		return
 	var label := rail_name.strip_edges()
@@ -209,8 +210,7 @@ func notify_grind_started(rail_name: String = "") -> void:
 	_air_elapsed = 0.0
 	_grind_toast_sent = true
 	_play_clip("grind")
-	# Physics owns grind HUD toast + juice punch on lock enter (G1 / Audio sync).
-	# Emit toast string for combo listeners; do not call_group again (double toast).
+	# Exact QA string — HUD passes Grind* through; may upgrade bare "Grind" if we resolved a rail.
 	trick_started.emit(toast)
 
 
