@@ -32,7 +32,7 @@ const GRIND_OLLIE_BOOST := 3.0
 const GRIND_MIN_NORMAL_Y := 0.22  # allow thin-bar edge tops; still reject walls
 const GRIND_FOOT_CLEAR := 0.04
 const STREET_RAIL_NAMES := ["Flatbar", "StairsA", "Ledge", "LongLedge"]
-const GRIND_PROXIMITY := 2.75
+const GRIND_PROXIMITY := 3.5
 const SPEED_MPH_SCALE := 2.15  # game units → readable HUD mph
 
 @onready var mesh: Node3D = $MeshPivot
@@ -55,6 +55,7 @@ var _board_lean := 0.0
 var _grinding := false
 var _grind_axis := Vector3(1.0, 0.0, 0.0)
 var _land_tween: Tween
+var _grind_grace := 0.0
 
 
 func _ready() -> void:
@@ -223,20 +224,22 @@ func _grind_move(horizontal: Vector3, wish: Vector3, delta: float) -> Vector3:
 func _update_grind_state() -> void:
 	var hit := _find_grind_collision()
 	var speed := Vector3(velocity.x, 0.0, velocity.z).length()
-	var can_lock := hit.has("axis") and speed >= GRIND_MIN_SPEED * 0.55
+	var speed_ok := speed >= GRIND_MIN_SPEED * 0.4 or _grinding
+	var can_lock := hit.has("axis") and speed_ok
 	if can_lock:
 		_grind_axis = hit["axis"]
 		var pt: Vector3 = hit["point"]
 		# Sit on rail top — origin ≈ feet; never lerp into the collider (QA sink).
 		var target_y := pt.y - GRIND_FOOT_CLEAR
+		_grind_grace = 0.22
 		if not _grinding:
 			_grinding = true
 			_airborne = false
 			grind_started.emit()
 			_play_sfx_grind_start()
 			var rail := str(hit.get("rail", ""))
-			if rail == "":
-				rail = _street_rail_label(hit.get("collider") as Node) if hit.get("collider") else ""
+			if rail == "" and hit.get("collider") is Node:
+				rail = _street_rail_label(hit.get("collider") as Node)
 			if _tricks and _tricks.has_method("notify_grind_started"):
 				_tricks.notify_grind_started(rail)
 			elif _tricks and _tricks.has_method("notify_trick_started"):
@@ -247,6 +250,10 @@ func _update_grind_state() -> void:
 		velocity.y = 0.0
 		return
 	if _grinding:
+		_grind_grace -= get_physics_process_delta_time()
+		if _grind_grace > 0.0:
+			velocity.y = 0.0
+			return
 		_grinding = false
 		grind_ended.emit()
 		_play_sfx_grind_end()
@@ -295,7 +302,7 @@ func _street_rail_label(node: Node) -> String:
 
 func _find_grind_by_proximity() -> Dictionary:
 	var speed := Vector3(velocity.x, 0.0, velocity.z).length()
-	if speed < GRIND_MIN_SPEED * 0.45:
+	if speed < GRIND_MIN_SPEED * 0.35 and not _grinding:
 		return {}
 	var best: Node3D = null
 	var best_d := GRIND_PROXIMITY
