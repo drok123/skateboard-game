@@ -15,6 +15,7 @@ var _punch_fov_add := 0.0
 
 
 func _ready() -> void:
+	add_to_group("follow_camera")
 	_base_fov = fov
 	if target_path != NodePath(""):
 		_target = get_node_or_null(target_path) as Node3D
@@ -27,16 +28,16 @@ func _ready() -> void:
 			_look_target = look
 
 
-## Light land / impact punch — offset + FOV only (beta playability).
-func apply_punch(strength: float, duration: float = 0.09) -> void:
-	strength = clampf(strength, 0.0, 1.0) * 0.7
+## Land / impact punch — FOV kick + camera dip (must read at default follow cam).
+func apply_punch(strength: float, duration: float = 0.22) -> void:
+	strength = clampf(strength, 0.0, 1.5)
 	if strength < 0.05:
 		return
-	_punch_offset = Vector3(0.0, -0.11 * strength, 0.045 * strength)
-	_punch_fov_add = 3.2 * strength
+	_punch_offset = Vector3(0.0, -0.55 * strength, 0.12 * strength)
+	_punch_fov_add = 14.0 * strength
 	var tw := create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(self, "_punch_offset", Vector3.ZERO, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "_punch_offset", Vector3.ZERO, duration).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(self, "_punch_fov_add", 0.0, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 

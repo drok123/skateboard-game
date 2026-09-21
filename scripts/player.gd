@@ -251,7 +251,7 @@ func _on_landed(impact: float = 0.35) -> void:
 		_active_air_trick = ""
 	_airborne = false
 	# After TrickSystem land pose starts — overwrite with camera-readable squash on EmilyMesh/Board.
-	_land_squash()
+	_land_squash(impact)
 
 
 func _update_board_visuals(delta: float, on_surface: bool) -> void:
@@ -291,49 +291,49 @@ func _ollie_squash() -> void:
 	tw.tween_property(mesh, "scale", Vector3.ONE, 0.12)
 
 
-func _land_squash() -> void:
-	## Squash nodes the camera sees (EmilyMesh + Board). MeshPivot-only was invisible
-	## because TrickSystem AnimationPlayer / land pose drives Emily:scale.
+func _land_squash(impact: float = 0.5) -> void:
+	## Camera-readable land hit. Prefer cam FOV/dip + MeshPivot sink (don't fight TrickSystem Emily:scale).
 	if _land_tween and _land_tween.is_valid():
 		_land_tween.kill()
 
-	var emily_mesh: Node3D = null
-	if _emily:
-		emily_mesh = _emily.get_node_or_null("EmilyMesh") as Node3D
-		if emily_mesh == null:
-			emily_mesh = _emily
-		# Stop TrickSystem pose fight for the impact window.
-		if _tricks and _tricks.has_method("suppress_pose_for_land"):
-			_tricks.call("suppress_pose_for_land", 0.45)
-		var anim := get_node_or_null("AnimationPlayer") as AnimationPlayer
-		if anim:
-			anim.stop()
+	if _tricks and _tricks.has_method("suppress_pose_for_land"):
+		_tricks.call("suppress_pose_for_land", 0.55)
+	var anim := get_node_or_null("AnimationPlayer") as AnimationPlayer
+	if anim:
+		anim.stop()
 
-	var targets: Array[Node3D] = []
-	if emily_mesh:
-		targets.append(emily_mesh)
-	if board:
-		targets.append(board)
-	if targets.is_empty() and mesh:
-		targets.append(mesh)
+	# Hard camera punch — readable even if mesh squash is contested.
+	var cam := get_tree().get_first_node_in_group("follow_camera") as Node
+	if cam == null:
+		cam = get_viewport().get_camera_3d()
+	if cam and cam.has_method("apply_punch"):
+		cam.call("apply_punch", clampf(0.85 + impact * 0.65, 0.85, 1.5), 0.28)
 
+	if mesh == null:
+		return
+
+	var base_y := mesh.position.y
+	var board_base_y := board.position.y if board else 0.0
+	var board_base_scale := board.scale if board else Vector3.ONE
+
+	# Whole rider assembly sinks + flattens (MeshPivot), hold, then pop back.
+	mesh.scale = Vector3.ONE
 	_land_tween = create_tween()
 	_land_tween.set_parallel(true)
-	for n in targets:
-		var base_y := n.position.y
-		var base_scale := n.scale
-		n.set_meta("land_base_y", base_y)
-		n.set_meta("land_base_scale", base_scale)
-		_land_tween.tween_property(n, "scale", base_scale * Vector3(1.45, 0.32, 1.45), 0.08)
-		_land_tween.tween_property(n, "position:y", base_y - 0.28, 0.08)
+	_land_tween.tween_property(mesh, "scale", Vector3(1.55, 0.28, 1.55), 0.09)
+	_land_tween.tween_property(mesh, "position:y", base_y - 0.38, 0.09)
+	if board:
+		_land_tween.tween_property(board, "scale", board_base_scale * Vector3(1.2, 0.35, 1.2), 0.09)
+		_land_tween.tween_property(board, "position:y", board_base_y - 0.06, 0.09)
 	_land_tween.set_parallel(false)
-	_land_tween.tween_interval(0.06)
+	_land_tween.tween_interval(0.12)
 	_land_tween.set_parallel(true)
-	for n in targets:
-		var base_y: float = n.get_meta("land_base_y")
-		var base_scale: Vector3 = n.get_meta("land_base_scale")
-		_land_tween.tween_property(n, "scale", base_scale, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		_land_tween.tween_property(n, "position:y", base_y, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_land_tween.tween_property(mesh, "scale", Vector3.ONE, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_land_tween.tween_property(mesh, "position:y", base_y, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if board:
+		_land_tween.tween_property(board, "scale", board_base_scale, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_land_tween.tween_property(board, "position:y", board_base_y, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
 
 
 func _play_sfx_ollie() -> void:
@@ -347,9 +347,6 @@ func _play_sfx_land(impact: float) -> void:
 	if _sfx_land:
 		_sfx_land.volume_db = lerpf(-8.0, 0.0, clampf(impact, 0.0, 1.0))
 		_sfx_land.play()
-	var cam := get_viewport().get_camera_3d() if get_viewport() else null
-	if cam and cam.has_method("apply_punch"):
-		cam.apply_punch(impact)
 
 func _ensure_sfx_streams() -> void:
 	if _sfx_ollie and _sfx_ollie.stream == null:
