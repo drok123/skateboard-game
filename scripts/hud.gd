@@ -143,6 +143,8 @@ func _try_connect_trick_system() -> void:
 		return
 	if _trick_system.has_signal("trick_started"):
 		_trick_system.trick_started.connect(_on_trick_started)
+	if _trick_system.has_signal("trick_landed"):
+		_trick_system.trick_landed.connect(_on_trick_landed)
 	if _trick_system.has_signal("combo_changed"):
 		_trick_system.combo_changed.connect(_on_trick_combo_changed)
 	if _trick_system.has_signal("bailed"):
@@ -159,6 +161,11 @@ func _on_trick_started(trick_name: String) -> void:
 	show_toast(_pretty_trick_name(trick_name))
 
 
+func _on_trick_landed(trick_name: String, _score: int) -> void:
+	var pretty := _pretty_trick_name(trick_name) if trick_name != "" else "Land"
+	show_toast("%s — Landed" % pretty)
+
+
 func _on_trick_combo_changed(multiplier: int, _total_score: int) -> void:
 	set_combo(multiplier)
 
@@ -170,9 +177,12 @@ func _on_trick_bailed() -> void:
 func _update_speed() -> void:
 	var speed := 0.0
 	if _player:
-		var h := Vector3(_player.velocity.x, 0.0, _player.velocity.z)
-		speed = h.length()
-	# Compact integer mph-style readout (game units ≈ mph for playtest).
+		if _player.has_method("get_speed_mph"):
+			speed = float(_player.get_speed_mph())
+		else:
+			var h := Vector3(_player.velocity.x, 0.0, _player.velocity.z)
+			speed = h.length() * 2.15
+	# Integer mph readout — Physics scales game units for readable playtest feedback.
 	_speed_label.text = "%d mph" % int(round(speed))
 
 

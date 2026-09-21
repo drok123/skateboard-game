@@ -4,28 +4,31 @@ extends CharacterBody3D
 
 signal sfx_ollie()
 signal sfx_land(impact: float)
+signal grind_started()
+signal grind_ended()
 
 # --- Tuned for readable beta feel ---
-const MAX_SPEED := 13.5
-const PUSH_ACCEL := 22.0
-const CARVE_ACCEL := 12.0
+const MAX_SPEED := 16.0
+const PUSH_ACCEL := 28.0
+const CARVE_ACCEL := 14.0
 const FRICTION := 5.5
 const BRAKE_FRICTION := 16.0
 const TURN_SPEED := 3.1
 const TURN_SPEED_FAST := 4.8
-const JUMP_VELOCITY := 7.2
-const OLLIE_FORWARD_BOOST := 1.8
+const JUMP_VELOCITY := 10.5
+const OLLIE_FORWARD_BOOST := 2.4
 const AIR_CONTROL := 0.32
 const AIR_TURN := 1.9
-const GRAVITY := 24.0
+const GRAVITY := 20.0
 const MAX_FALL := -34.0
-const LAND_STICK := 0.88
+const LAND_STICK := 0.78
 const CARVE_LEAN_MAX := 0.42
 const SECONDARY_RECOVER_RATE := 1.8
 const GRIND_MIN_SPEED := 3.5
 const GRIND_FRICTION := 1.2
 const GRIND_SNAP := 18.0
-const GRIND_OLLIE_BOOST := 2.2
+const GRIND_OLLIE_BOOST := 3.0
+const SPEED_MPH_SCALE := 2.15  # game units → readable HUD mph
 
 @onready var mesh: Node3D = $MeshPivot
 @onready var board: MeshInstance3D = $MeshPivot/Board
@@ -133,6 +136,16 @@ func get_secondary_intensity() -> float:
 func is_grinding() -> bool:
 	return _grinding
 
+func get_horizontal_speed() -> float:
+	return Vector3(velocity.x, 0.0, velocity.z).length()
+
+
+func get_speed_mph() -> float:
+	## HUD-facing speed so playtest never reads as a dead 0 while rolling.
+	return get_horizontal_speed() * SPEED_MPH_SCALE
+
+
+
 
 ## Tricks upgrades the in-air name (kickflip/heelflip/180/shuv/tre) after ollie pop.
 func set_air_trick(trick_name: String) -> void:
@@ -167,13 +180,16 @@ func _update_grind_state() -> void:
 		if not _grinding:
 			_grinding = true
 			_airborne = false
-			# Snap onto rail height lightly.
+			grind_started.emit()
+			if _tricks and _tricks.has_method("notify_trick_started"):
+				_tricks.notify_trick_started("grind")
 			if hit.has("point"):
 				var pt: Vector3 = hit["point"]
 				global_position.y = lerpf(global_position.y, pt.y + 0.55, 0.45)
 		return
 	if _grinding:
 		_grinding = false
+		grind_ended.emit()
 
 
 func _find_grind_collision() -> Dictionary:
@@ -267,16 +283,17 @@ func _ollie_squash() -> void:
 	if mesh == null:
 		return
 	var tw := create_tween()
-	tw.tween_property(mesh, "scale", Vector3(1.12, 0.78, 1.12), 0.05)
-	tw.tween_property(mesh, "scale", Vector3.ONE, 0.14)
+	tw.tween_property(mesh, "scale", Vector3(1.16, 0.68, 1.16), 0.05)
+	tw.tween_property(mesh, "scale", Vector3(0.96, 1.12, 0.96), 0.08)
+	tw.tween_property(mesh, "scale", Vector3.ONE, 0.12)
 
 
 func _land_squash() -> void:
 	if mesh == null:
 		return
 	var tw := create_tween()
-	tw.tween_property(mesh, "scale", Vector3(1.18, 0.72, 1.18), 0.05)
-	tw.tween_property(mesh, "scale", Vector3.ONE, 0.16)
+	tw.tween_property(mesh, "scale", Vector3(1.22, 0.62, 1.22), 0.06)
+	tw.tween_property(mesh, "scale", Vector3.ONE, 0.18)
 
 
 func _play_sfx_ollie() -> void:
