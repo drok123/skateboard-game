@@ -1,8 +1,9 @@
-[gd_scene load_steps=5 format=3 uid="uid://bskatemain01"]
+[gd_scene load_steps=6 format=3 uid="uid://bskatemain01"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" uid="uid://bskateplayer01" path="res://scenes/player.tscn" id="2_player"]
 [ext_resource type="Script" path="res://scripts/follow_camera.gd" id="3_cam"]
+[ext_resource type="PackedScene" uid="uid://bskatehud001" path="res://scenes/hud.tscn" id="4_hud"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -26,7 +27,9 @@ directional_shadow_max_distance = 60.0
 [node name="Park" type="Node3D" parent="."]
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 6)
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -18, 1.2, 4)
+
+[node name="HUD" parent="." instance=ExtResource("4_hud")]
 
 [node name="FollowCamera" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.92, 0.39, 0, -0.39, 0.92, 0, 5.5, 14)

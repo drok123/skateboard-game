@@ -29,6 +29,8 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = JUMP_VELOCITY
 		_ollie_squash()
+		get_tree().call_group("hud", "show_toast", "Ollie")
+		get_tree().call_group("hud", "add_combo", 1)
 
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var wish := Vector3(input_dir.x, 0.0, input_dir.y)
