@@ -31,6 +31,8 @@ const GRIND_SNAP := 28.0
 const GRIND_OLLIE_BOOST := 3.0
 const GRIND_MIN_NORMAL_Y := 0.45  # top-face only — no side sink
 const GRIND_FOOT_CLEAR := 0.04
+const STREET_RAIL_NAMES := ["Flatbar", "StairsA", "Ledge", "LongLedge"]
+const GRIND_PROXIMITY := 1.85
 const SPEED_MPH_SCALE := 2.15  # game units → readable HUD mph
 
 @onready var mesh: Node3D = $MeshPivot
@@ -201,7 +203,10 @@ func _update_grind_state() -> void:
 			_airborne = false
 			grind_started.emit()
 			_play_sfx_grind_start()
-			if _tricks and _tricks.has_method("notify_trick_started"):
+			var rail := str(hit.get("rail", ""))
+			if _tricks and _tricks.has_method("notify_grind_started"):
+				_tricks.notify_grind_started(rail)
+			elif _tricks and _tricks.has_method("notify_trick_started"):
 				_tricks.notify_trick_started("grind")
 			global_position.y = target_y
 		else:
@@ -234,8 +239,62 @@ func _find_grind_collision() -> Dictionary:
 		if axis.length_squared() < 0.01:
 			axis = Vector3(sin(_facing), 0.0, cos(_facing))
 		axis = axis.normalized()
-		return {"axis": axis, "point": col.get_position(), "normal": n}
-	return {}
+		return {
+			"axis": axis,
+			"point": col.get_position(),
+			"normal": n,
+			"rail": _street_rail_label(collider as Node),
+		}
+	# Thin plaza bars often miss top-face slides — proximity for Flatbar/StairsA/LongLedge.
+	return _find_grind_by_proximity()
+
+
+func _street_rail_label(node: Node) -> String:
+	var n := node
+	while n:
+		var name_str := String(n.name)
+		for want in STREET_RAIL_NAMES:
+			if name_str == want or name_str.begins_with(want):
+				return want
+		n = n.get_parent()
+	return ""
+
+
+func _find_grind_by_proximity() -> Dictionary:
+	var speed := Vector3(velocity.x, 0.0, velocity.z).length()
+	if speed < GRIND_MIN_SPEED * 0.55:
+		return {}
+	var best: Node3D = null
+	var best_d := GRIND_PROXIMITY
+	for node in get_tree().get_nodes_in_group("grindable"):
+		if not (node is Node3D):
+			continue
+		if _street_rail_label(node) == "":
+			continue
+		var n3 := node as Node3D
+		var d := Vector3(
+			global_position.x - n3.global_position.x,
+			0.0,
+			global_position.z - n3.global_position.z
+		).length()
+		var dy := absf(global_position.y - n3.global_position.y)
+		if d < best_d and dy < 1.15:
+			best_d = d
+			best = n3
+	if best == null:
+		return {}
+	var forward := Vector3(velocity.x, 0.0, velocity.z)
+	if forward.length_squared() < 0.01:
+		forward = Vector3(sin(_facing), 0.0, cos(_facing))
+	forward = forward.normalized()
+	# Synthetic top point so foot clear sits on bar height.
+	var top := best.global_position + Vector3(0.0, 0.45, 0.0)
+	return {
+		"axis": forward,
+		"point": top,
+		"normal": Vector3.UP,
+		"rail": _street_rail_label(best),
+	}
 
 
 func _do_ollie(from_grind: bool = false) -> void:
