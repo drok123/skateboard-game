@@ -4,6 +4,15 @@ Living list owned by **Art Direction**. Derron: pull feel + readability from **s
 
 Sister note: `docs/reference/session-feel-ref.md` (Session clip Derron called out).
 
+## Derron lock (2026-09-21) — skate. first
+
+**Primary reference for beta: skate. (Skate 4).** All squads cite skate. clips before building. Session/XL remain secondary (weight settle / trick timing only) — do not idle on Session-first passes when skate. covers the lane.
+
+Starter clips: https://www.youtube.com/watch?v=p14MSdRtNIo · https://www.youtube.com/watch?v=-Mi9EKoBCSg · https://www.youtube.com/watch?v=DeGXanmlJ_0
+
+Nothing idle — if your lane is blocked, help the nearest skate.-aligned bottleneck (cam/turn, plaza read, board silhouette, grind feedback).
+
+
 ## How to use
 
 1. Watch with the question “what reads at gameplay camera distance?” not “how do we clone this.”
