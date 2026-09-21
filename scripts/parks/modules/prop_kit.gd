@@ -6,14 +6,14 @@ extends RefCounted
 
 
 ## Pale Venice deck concrete (#C8C4BC) — matte so daylight doesn't wash white.
-const COLOR_CONCRETE := Color(0.784, 0.769, 0.737)
+const COLOR_CONCRETE := Color(0.58, 0.57, 0.54)
 ## Cooler bowl / underside read (#8E959A).
-const COLOR_CONCRETE_COOL := Color(0.557, 0.584, 0.604)
+const COLOR_CONCRETE_COOL := Color(0.46, 0.48, 0.50)
 ## Dark plaza metal for lip/rail silhouette vs pale concrete (#2E3236).
 ## Was #A8ADB2 (too close to deck → washed furniture).
 const COLOR_METAL := Color(0.18, 0.20, 0.21)
 ## Beach apron sand (#D9C7A0).
-const COLOR_SAND := Color(0.851, 0.780, 0.627)
+const COLOR_SAND := Color(0.78, 0.66, 0.46)
 const COLOR_SOIL := Color(0.28, 0.2, 0.12)
 ## Palm trunk (warm brown).
 const COLOR_PALM := Color(0.42, 0.32, 0.18)

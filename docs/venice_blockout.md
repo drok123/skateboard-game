@@ -1,4 +1,4 @@
-# Venice Beach Skatepark — Blockout Spec (Park Designer)
+# Venice Beach Skatepark — Native Surface Pass
 
 Reference aerial: `references/park/venice_beach_skatepark_aerial.jpg`  
 Repo: https://github.com/drok123/skateboard-game  
@@ -6,7 +6,11 @@ Owner: Park Designer · Coordinates with Props & Obstacles + Mission Flow
 
 ## Goal
 
-Replace the tiny procedural park in `scripts/main.gd` with a **readable Venice-inspired blockout**: bowls + street, coping, stairs/ledges/rails, palm planters, perimeter. Teach movement through **flow lines**, not decoration. Primitives / CSG OK for v1.
+The blockout now uses one continuous generated ride surface, derived from the local aerial references and the authorized `skater-test` Venice builder. Overlapping height fields form the west kidney, linked central snake pockets, and east hero bowl without seams or hidden floor plates. Street terraces, partial coping arcs, the southeast palm island, mission zones, and required obstacle names remain integrated with this project's session flow.
+
+The geometry is reference-based and deliberately compressed for this game's camera and movement. It should not be described as a survey-grade or exact reconstruction.
+
+Regression coverage lives in `tools/test_venice_park.gd` and verifies the continuous collision surface, major bowl depths, raised transfer island, landmark props, and mission wiring.
 
 ## Scale (from people + perimeter in the aerial)
 

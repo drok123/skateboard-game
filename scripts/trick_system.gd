@@ -1,5 +1,5 @@
 extends Node
-## Beta: AnimationPlayer stubs + named trick_started toasts.
+## Committed air tricks, catches and short street-line scoring.
 ## Physics owns pop/land notify timing; air-key upgrades rename the active trick.
 ## Idle/push are real AnimationPlayer library entries (subtle scale/Y on MeshPivot/Emily).
 ## Soft secondary motion is NOT implemented here — see docs/soft-motion-rigging.md.
@@ -26,10 +26,15 @@ var _emily_rest_scale := Vector3.ONE
 var _emily_rest_y := 0.0
 var _airborne_open := false
 var _grind_toast_sent := false
-var _board: MeshInstance3D
-var _flip_tween: Tween
-var _board_spin_y := 0.0
-var _air_elapsed := 0.0
+var _trick_rotation := Vector3.ZERO
+var _flip_elapsed := 0.0
+var _flip_duration := 0.0
+var _flip_target := Vector3.ZERO
+var _grind_elapsed := 0.0
+var _grind_entry_score := 0
+var _last_scored_trick := ""
+var _repeat_count := 0
+var _stick_flick_ready := true
 
 
 func _ready() -> void:
@@ -51,6 +56,19 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not _airborne_open:
 		return
+	if event is InputEventJoypadMotion:
+		if event.axis not in [JOY_AXIS_RIGHT_X, JOY_AXIS_RIGHT_Y]:
+			return
+		var flick := Vector2(Input.get_joy_axis(event.device, JOY_AXIS_RIGHT_X), Input.get_joy_axis(event.device, JOY_AXIS_RIGHT_Y))
+		if flick.length() < 0.3:
+			_stick_flick_ready = true
+		elif _stick_flick_ready and flick.length() > 0.75:
+			_stick_flick_ready = false
+			if absf(flick.x) > absf(flick.y):
+				_upgrade_air_trick("kickflip" if flick.x > 0.0 else "heelflip")
+			else:
+				_upgrade_air_trick("backside_shuv" if flick.y < 0.0 else "tre")
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		var trick: Variant = TrickClips.AIR_TRICK_KEYS.get(event.physical_keycode)
 		if trick != null:
@@ -60,14 +78,18 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	_update_loco_clip()
-	_try_wish_air_upgrade()
 	_apply_board_spin(delta)
-	if _combo_mult <= 1:
+	if _active_trick == "grind":
+		_grind_elapsed += delta
+	# A line remains live while performing a trick, including its first landing.
+	if _airborne_open or _active_trick == "grind" or _combo_timer <= 0.0:
 		return
 	_combo_timer -= delta
 	if _combo_timer <= 0.0:
 		_combo_mult = 1
 		_combo_score = 0
+		_last_scored_trick = ""
+		_repeat_count = 0
 		combo_changed.emit(_combo_mult, _combo_score)
 
 
@@ -97,7 +119,6 @@ func _bind_emily_pose() -> void:
 		_emily = mesh
 	_emily_rest_scale = _emily.scale
 	_emily_rest_y = _emily.position.y
-	_board = get_parent().get_node_or_null("MeshPivot/Board") as MeshInstance3D
 	_play_idle_pose()
 
 
@@ -182,8 +203,15 @@ func notify_trick_started(trick_name: String = "ollie") -> void:
 	if trick_name == "grind" or trick_name in ["flatbar", "stairs_hubba", "ledge", "Flatbar", "StairsA", "LongLedge", "Ledge"]:
 		notify_grind_started(trick_name if trick_name != "grind" else "")
 		return
+	if _active_trick == "grind":
+		notify_grind_ended()
+	_reset_board_spin()
 	_active_trick = trick_name
-	_air_elapsed = 0.0
+	_stick_flick_ready = true
+	for device in Input.get_connected_joypads():
+		var stick := Vector2(Input.get_joy_axis(device, JOY_AXIS_RIGHT_X), Input.get_joy_axis(device, JOY_AXIS_RIGHT_Y))
+		if stick.length() >= 0.3:
+			_stick_flick_ready = false
 	_airborne_open = true
 	_grind_toast_sent = false
 	trick_started.emit(trick_name)
@@ -205,9 +233,11 @@ func notify_grind_started(rail_name: String = "") -> void:
 	label = _toast_rail_label(label)
 	# Last resort: still show Grind so QA sees feedback even if label miss.
 	var toast := "Grind — %s" % label if label != "" else "Grind"
+	_grind_entry_score = _base_score(_active_trick) if _airborne_open else 0
+	_grind_elapsed = 0.0
+	_reset_board_spin()
 	_active_trick = "grind"
 	_airborne_open = false
-	_air_elapsed = 0.0
 	_grind_toast_sent = true
 	_play_clip("grind")
 	# Exact QA string — HUD passes Grind* through; may upgrade bare "Grind" if we resolved a rail.
@@ -216,7 +246,12 @@ func notify_grind_started(rail_name: String = "") -> void:
 
 func notify_grind_ended() -> void:
 	if _active_trick == "grind":
+		# Reward a sustained lock, not repeated collision chatter.
+		if _grind_elapsed >= 0.2:
+			_award_trick("grind", 150 + int(minf(_grind_elapsed, 8.0) * 100.0) + _grind_entry_score)
 		_active_trick = ""
+	_grind_elapsed = 0.0
+	_grind_entry_score = 0
 	_grind_toast_sent = false
 
 
@@ -277,29 +312,47 @@ func _resolve_nearby_street_rail() -> String:
 
 func notify_trick_landed(trick_name: String = "") -> void:
 	var name := trick_name if trick_name != "" else _active_trick
-	if name == "":
-		name = "ollie"
+	if name == "" or not _airborne_open:
+		return
+	if not is_trick_caught():
+		notify_bailed()
+		return
 	_airborne_open = false
 	_grind_toast_sent = false
 	_play_clip("land")
 	_play_land_pose()
-	if _combo_timer > 0.0:
-		_combo_mult = mini(_combo_mult + 1, 8)
-	else:
-		_combo_mult = 1
-	var base := _base_score(name)
-	var gained := base * _combo_mult
-	_combo_score += gained
-	_combo_timer = combo_window_sec
-	trick_landed.emit(name, gained)
-	combo_changed.emit(_combo_mult, _combo_score)
-	_land_toast(name, gained)
+	_award_trick(name, _base_score(name))
 	_reset_board_spin()
 	_active_trick = ""
 	_damp_secondary_for_catch()
 
 
+func _award_trick(trick_name: String, base: int) -> void:
+	if _combo_timer > 0.0:
+		_combo_mult = mini(_combo_mult + 1, 8)
+	else:
+		_combo_mult = 1
+		_combo_score = 0
+		_last_scored_trick = ""
+		_repeat_count = 0
+	_repeat_count = _repeat_count + 1 if trick_name == _last_scored_trick else 0
+	_last_scored_trick = trick_name
+	# Variety is worth more than repeating the easiest input in a line.
+	var freshness := maxf(0.4, 1.0 - float(_repeat_count) * 0.2)
+	var gained := int(round(float(base) * freshness)) * _combo_mult
+	_combo_score += gained
+	_combo_timer = combo_window_sec
+	trick_landed.emit(trick_name, gained)
+	combo_changed.emit(_combo_mult, _combo_score)
+	_land_toast(trick_name, gained)
+
+
 func notify_bailed() -> void:
+	_reset_board_spin()
+	_grind_elapsed = 0.0
+	_grind_entry_score = 0
+	_last_scored_trick = ""
+	_repeat_count = 0
 	_airborne_open = false
 	_grind_toast_sent = false
 	_active_trick = ""
@@ -315,7 +368,8 @@ func notify_bailed() -> void:
 func _upgrade_air_trick(trick_name: String) -> void:
 	if not _airborne_open:
 		return
-	if trick_name == _active_trick:
+	# Once flicked, commit to the trick until catch/landing.
+	if _active_trick != "ollie" or trick_name not in TrickClips.V1_TRICKS:
 		return
 	_active_trick = trick_name
 	var body := get_parent()
@@ -422,69 +476,48 @@ func _base_score(trick_name: String) -> int:
 
 
 
-## Air wish (WASD) upgrades ollie → named trick so Space+steer feels like skating.
-func _try_wish_air_upgrade() -> void:
-	if not _airborne_open or _active_trick != "ollie":
-		return
-	_air_elapsed += get_process_delta_time()
-	# Ignore hold-from-push for a beat so plain Space stays an ollie.
-	if _air_elapsed < 0.16:
-		return
-	var wish := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	if wish.length_squared() < 0.45:
-		return
-	if absf(wish.x) >= absf(wish.y):
-		_upgrade_air_trick("kickflip" if wish.x > 0.0 else "heelflip")
-	elif wish.y > 0.0:
-		_upgrade_air_trick("frontside_180")
-	else:
-		_upgrade_air_trick("backside_shuv")
+## Physics composes this local board rotation with its pitch and lean.
+func get_board_trick_rotation() -> Vector3:
+	return _trick_rotation
 
 
-## Board.rotation.y only — Physics owns x (pitch) and z (lean).
+func is_trick_caught() -> bool:
+	return _flip_duration <= 0.0 or _flip_elapsed >= _flip_duration
+
+
 func _start_board_spin(trick_name: String) -> void:
-	if _board == null:
-		_board = get_parent().get_node_or_null("MeshPivot/Board") as MeshInstance3D
-	if _board == null:
-		return
-	var turns := 1.0
+	_flip_elapsed = 0.0
+	_flip_duration = 0.3
 	match trick_name:
-		"backside_shuv", "frontside_180", "backside_180":
-			turns = 0.5
+		"kickflip":
+			_flip_target = Vector3(0.0, 0.0, TAU)
+		"heelflip":
+			_flip_target = Vector3(0.0, 0.0, -TAU)
+		"backside_shuv", "backside_180":
+			_flip_target = Vector3(0.0, PI, 0.0)
+		"frontside_180":
+			_flip_target = Vector3(0.0, -PI, 0.0)
 		"tre":
-			turns = 1.5
-		"kickflip", "heelflip":
-			turns = 1.0
+			_flip_target = Vector3(0.0, TAU, TAU)
+			_flip_duration = 0.4
 		_:
-			turns = 0.0
-	if turns <= 0.0:
+			_flip_target = Vector3.ZERO
+			_flip_duration = 0.0
+
+
+func _apply_board_spin(delta: float) -> void:
+	if _flip_duration <= 0.0:
 		return
-	var dir := -1.0 if trick_name in ["heelflip", "frontside_180"] else 1.0
-	_board_spin_y = 0.0
-	if _flip_tween and _flip_tween.is_valid():
-		_flip_tween.kill()
-	_flip_tween = create_tween()
-	_flip_tween.tween_method(_set_board_spin_y, 0.0, dir * turns * TAU, 0.35)
-
-
-func _set_board_spin_y(angle: float) -> void:
-	_board_spin_y = angle
-
-
-func _apply_board_spin(_delta: float) -> void:
-	if _board == null:
-		return
-	# Re-apply each frame so Physics pitch/lean lerps don't clear an unread y.
-	_board.rotation.y = _board_spin_y
+	_flip_elapsed = minf(_flip_elapsed + delta, _flip_duration)
+	var progress := _flip_elapsed / _flip_duration
+	_trick_rotation = _flip_target * smoothstep(0.0, 1.0, progress)
 
 
 func _reset_board_spin() -> void:
-	if _flip_tween and _flip_tween.is_valid():
-		_flip_tween.kill()
-	_flip_tween = null
-	_board_spin_y = 0.0
-	if _board:
-		_board.rotation.y = 0.0
+	_flip_elapsed = 0.0
+	_flip_duration = 0.0
+	_flip_target = Vector3.ZERO
+	_trick_rotation = Vector3.ZERO
 
 
 func _land_toast(trick_name: String, gained: int) -> void:

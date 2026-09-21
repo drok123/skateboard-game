@@ -6,6 +6,7 @@ const LOCOMOTION := [
 	"idle",
 	"push",
 	"crouch",
+	"grind",
 	"land",
 ]
 
@@ -25,6 +26,7 @@ const STUB_LENGTHS := {
 	"push": 0.6,
 	"crouch": 0.25,
 	"land": 0.35,
+	"grind": 0.6,
 	"ollie": 0.45,
 	"kickflip": 0.55,
 	"heelflip": 0.55,

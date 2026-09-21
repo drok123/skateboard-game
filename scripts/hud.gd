@@ -1,5 +1,5 @@
 extends CanvasLayer
-## Minimal skate HUD: speed, combo stub, trick toast, dismissible controls hint.
+## Skate HUD: speed, line score, trick feedback, and recoverable controls help.
 ## High-contrast warm daylight UI over pale concrete (#C8C4BC).
 
 signal combo_changed(value: int)
@@ -16,6 +16,7 @@ signal controls_hint_dismissed()
 @export var toast_punch_sec: float = 0.08
 
 var combo: int = 0
+var _combo_score: int = 0
 
 @onready var _speed_label: Label = $Margin/Root/TopRow/SpeedPanel/SpeedMargin/SpeedLabel
 @onready var _combo_panel: PanelContainer = $Margin/Root/TopRow/ComboPanel
@@ -54,7 +55,7 @@ func _ready() -> void:
 	_set_combo_label(0)
 	set_objective("Warm-up street — Push the plaza")
 	_resolve_player()
-	# Short delay so the hint is readable before move/jump can dismiss it.
+	# Short delay before accepting help toggles.
 	get_tree().create_timer(hint_grace_sec).timeout.connect(_on_hint_grace_done)
 
 
@@ -62,13 +63,14 @@ func _process(_delta: float) -> void:
 	if _player == null or not is_instance_valid(_player):
 		_resolve_player()
 	_try_connect_trick_system()
-	_try_dismiss_hint_from_play()
+	# Controls remain available until explicitly hidden with H.
 
 
 func _physics_process(delta: float) -> void:
 	if _player == null or not is_instance_valid(_player):
 		_resolve_player()
-	_update_speed(delta)
+	if not get_tree().paused:
+		_update_speed(delta)
 
 
 func _center_toast_pivot() -> void:
@@ -114,19 +116,19 @@ func set_objective(text: String) -> void:
 
 
 func set_combo(value: int) -> void:
-	## Public API — set combo counter (stub for later trick scoring).
+	## Public API — set combo multiplier.
 	combo = maxi(value, 0)
 	_set_combo_label(combo)
 	combo_changed.emit(combo)
 
 
 func add_combo(amount: int = 1) -> void:
-	## Public API — bump combo (stub).
+	## Public API — bump combo multiplier.
 	set_combo(combo + amount)
 
 
 func reset_combo() -> void:
-	## Public API — clear combo (stub).
+	## Public API — clear combo multiplier.
 	set_combo(0)
 
 
@@ -254,7 +256,7 @@ func _on_trick_started(trick_name: String) -> void:
 	show_toast(trick_name)
 
 
-func _on_trick_landed(trick_name: String, _score: int) -> void:
+func _on_trick_landed(trick_name: String, score: int) -> void:
 	if trick_name.is_empty():
 		show_toast("Land")
 		return
@@ -263,15 +265,18 @@ func _on_trick_landed(trick_name: String, _score: int) -> void:
 	if pretty.begins_with("Grind"):
 		show_toast(pretty)
 	else:
-		show_toast("%s — Landed" % pretty)
+		show_toast("%s — Landed +%d" % [pretty, score])
 
 
-func _on_trick_combo_changed(multiplier: int, _total_score: int) -> void:
-	set_combo(multiplier)
+func _on_trick_combo_changed(multiplier: int, total_score: int) -> void:
+	_combo_score = total_score
+	set_combo(multiplier if total_score > 0 else 0)
 
 
 func _on_trick_bailed() -> void:
+	_combo_score = 0
 	reset_combo()
+	show_toast("Bailed — try that line again")
 
 
 func _update_speed(delta: float = 0.0) -> void:
@@ -309,27 +314,13 @@ func _set_combo_label(value: int) -> void:
 	if _combo_panel:
 		_combo_panel.visible = value > 0
 	if value > 0:
-		_combo_label.text = "x%d" % value
+		_combo_label.text = "%d pts  ·  x%d" % [_combo_score, value]
 	else:
 		_combo_label.text = ""
 
 
 func _on_hint_grace_done() -> void:
 	_hint_grace_done = true
-
-
-func _try_dismiss_hint_from_play() -> void:
-	if _hint_dismissed or not _hint_grace_done:
-		return
-	var moving := (
-		Input.is_action_pressed("move_forward")
-		or Input.is_action_pressed("move_back")
-		or Input.is_action_pressed("move_left")
-		or Input.is_action_pressed("move_right")
-	)
-	var jumped := Input.is_action_just_pressed("jump")
-	if moving or jumped:
-		dismiss_controls_hint()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -343,17 +334,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
-	if _hint_dismissed or not _hint_grace_done:
+	if not _hint_grace_done:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_H or event.keycode == KEY_H:
-			dismiss_controls_hint()
+			if _hint_dismissed:
+				_hint_dismissed = false
+				_hint_panel.visible = true
+			else:
+				dismiss_controls_hint()
 			get_viewport().set_input_as_handled()
 
 
 func _pause_game() -> void:
 	_pause_overlay.visible = true
 	get_tree().paused = true
+	_resume_button.grab_focus()
 
 
 func _resume_game() -> void:

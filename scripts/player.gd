@@ -1,38 +1,40 @@
 extends CharacterBody3D
-## Beta skate feel: push, carve lean, ollie pop, landing stick, grind stick.
+## Momentum-based riding with board-relative steering, pop, landing and rail locks.
 ## Player Controller feeds wish + jump via apply_movement; Physics owns velocity.
 
 signal sfx_ollie()
 signal sfx_land(impact: float)
 signal grind_started()
 signal grind_ended()
+signal push_stroke(power: float)
+signal riding_input_changed(steer: float, pushing: bool, brake: float)
 
-# --- Tuned for readable beta feel ---
-const MAX_SPEED := 16.0
-const PUSH_ACCEL := 28.0
-const CARVE_ACCEL := 10.0
-const FRICTION := 5.5
-const BRAKE_FRICTION := 16.0
-const TURN_SPEED := 4.6
-const TURN_SPEED_FAST := 6.0
-const JUMP_VELOCITY := 9.8
-const OLLIE_FORWARD_BOOST := 2.8
-const AIR_CONTROL := 0.22
+# Riding values use metres and seconds.
+const MAX_SPEED := 12.0
+const PUSH_CYCLE_SECONDS := 0.72
+const PUSH_IMPULSE := 2.85
+const PUSH_IMPULSE_AT_MAX_SPEED := 0.28
+const FRICTION := 0.38
+const BRAKE_FRICTION := 9.5
+const REVERSE_SPEED := 2.2
+const REVERSE_ACCEL := 4.0
+const JUMP_VELOCITY := 7.2
+const OLLIE_FORWARD_BOOST := 0.0
 const AIR_TURN := 1.35
 const GRAVITY := 22.0
-const GRAVITY_UP := 16.0  # Session hang — lighter while rising
+const GRAVITY_UP := 22.0  # Session hang — lighter while rising
 const MAX_FALL := -40.0
-const LAND_STICK := 0.62
+const LAND_STICK := 0.97
 const CARVE_LEAN_MAX := 0.52
 const SECONDARY_RECOVER_RATE := 1.8
 const GRIND_MIN_SPEED := 0.9
 const GRIND_FRICTION := 0.7
 const GRIND_SNAP := 28.0
-const GRIND_OLLIE_BOOST := 3.0
+const GRIND_OLLIE_BOOST := 0.0
 const GRIND_MIN_NORMAL_Y := 0.12  # allow thin-bar edge tops; still reject walls
 const GRIND_FOOT_CLEAR := 0.04
 const STREET_RAIL_NAMES := ["Flatbar", "StairsA", "Ledge", "LongLedge"]
-const GRIND_PROXIMITY := 2.4
+const GRIND_PROXIMITY := 0.24
 const SPEED_MPH_SCALE := 2.15  # game units → readable HUD mph
 
 @onready var mesh: Node3D = $MeshPivot
@@ -57,96 +59,125 @@ var _grind_rail := ""
 var _grind_axis := Vector3(1.0, 0.0, 0.0)
 var _land_tween: Tween
 var _grind_grace := 0.0
+var _grind_cooldown := 0.0
+var _jump_buffer := 0.0
+var _coyote_time := 0.0
+var _mesh_rest_y := 0.0
+var _board_rest_y := 0.12
+var _board_rest_scale := Vector3.ONE
+var _board_pitch := 0.0
+var _spawn_position := Vector3.ZERO
+var _pop_tween: Tween
+var _push_phase := 0.0
+var _push_was_down := false
+var _push_power := 0.0
+var _steer_input := 0.0
+var _brake_input := 0.0
+var _signed_speed := 0.0
 
 
 func _ready() -> void:
 	_ensure_sfx_streams()
+	floor_snap_length = 0.25
+	floor_constant_speed = false
+	_mesh_rest_y = mesh.position.y
+	_board_rest_y = board.position.y
+	_board_rest_scale = board.scale
+	call_deferred("_capture_spawn")
 
 
-## Public API for Player Controller: wish is world XZ intent (-1..1), jump_pressed is edge.
+## Compatibility API: world-space wish is converted to steering and throttle.
 func apply_movement(wish: Vector3, jump_pressed: bool, delta: float) -> void:
-	wish.y = 0.0
-	if wish.length_squared() > 1.0:
-		wish = wish.normalized()
+	var steer := 0.0
+	if wish.length_squared() > 0.01:
+		steer = -clampf(wrapf(atan2(wish.x, wish.z) - _facing, -PI, PI), -1.0, 1.0)
+	apply_riding_input(steer, wish.length(), 0.0, jump_pressed, delta)
 
+
+## Board-relative input: push builds speed, steering carves, release keeps rolling.
+func apply_riding_input(steer: float, push: float, brake: float, jump_pressed: bool, delta: float) -> void:
+	if global_position.y < -12.0:
+		reset_to_spawn()
+		return
+	steer = clampf(steer, -1.0, 1.0)
+	push = clampf(push, 0.0, 1.0)
+	brake = clampf(brake, 0.0, 1.0)
+	_steer_input = steer
+	_brake_input = brake
+	_update_push_cycle(push, delta)
+	riding_input_changed.emit(steer, push > 0.05, brake)
 	var on_floor := is_on_floor()
-	var land_impact := 0.0
-
-	if not on_floor and not _grinding:
-		var g := GRAVITY_UP if velocity.y > 0.0 else GRAVITY
-		velocity.y = maxf(velocity.y - g * delta, MAX_FALL)
-		_airborne = true
-	elif on_floor and velocity.y < 0.0:
-		land_impact = clampf((-velocity.y) / 18.0, 0.15, 1.0)
-		velocity.y = 0.0
-
-	# Land when leaving air (not only floor-edge) so FOV punch always fires after ollie.
-	if on_floor and not _grinding and (_airborne or not _was_on_floor):
-		var impact := land_impact if land_impact > 0.2 else 0.7
-		_on_landed(impact)
-
-	if jump_pressed and (on_floor or _grinding):
+	_grind_cooldown = maxf(0.0, _grind_cooldown - delta)
+	_jump_buffer = 0.12 if jump_pressed else maxf(0.0, _jump_buffer - delta)
+	_coyote_time = 0.09 if on_floor else maxf(0.0, _coyote_time - delta)
+	var popped := false
+	if _jump_buffer > 0.0 and (on_floor or _grinding or _coyote_time > 0.0):
 		_do_ollie(_grinding)
+		_jump_buffer = 0.0
+		_coyote_time = 0.0
+		popped = true
+	if not on_floor and not _grinding:
+		velocity.y = maxf(velocity.y - GRAVITY * delta, MAX_FALL)
+		_airborne = true
+	elif on_floor and not popped:
+		velocity.y = 0.0
 
 	var horizontal := Vector3(velocity.x, 0.0, velocity.z)
 	var speed := horizontal.length()
-	var control := 1.0 if (on_floor or _grinding) else AIR_CONTROL
-
+	var grounded := on_floor and not popped
 	if _grinding:
-		horizontal = _grind_move(horizontal, wish, delta)
-	elif wish.length_squared() > 0.01:
-		var wish_angle := atan2(wish.x, wish.z)
-		var facing_delta := absf(wrapf(wish_angle - _facing, -PI, PI))
-		var aligned := 1.0 - clampf(facing_delta / (PI * 0.5), 0.0, 1.0)
-		var accel := lerpf(CARVE_ACCEL, PUSH_ACCEL, aligned)
-		var target := wish * MAX_SPEED
-		horizontal = horizontal.move_toward(target, accel * control * delta)
-
-		# skate. Flick-It arcs: responsive yaw at low speed, stable at high (-Mi9EKoBCSg).
-		var turn := AIR_TURN
-		if on_floor:
-			var spd_t := clampf(speed / MAX_SPEED, 0.0, 1.0)
-			# Low speed → FAST (responsive); high speed → TURN_SPEED (stable).
-			turn = lerpf(TURN_SPEED_FAST, TURN_SPEED, spd_t)
-		_facing = lerp_angle(_facing, wish_angle, turn * delta)
-		if mesh:
-			mesh.rotation.y = _facing
-
-		# Couple horizontal velocity toward facing so carve arcs read (board goes where you look).
-		if on_floor and speed > 1.0:
-			var face_dir := Vector3(sin(_facing), 0.0, cos(_facing))
-			var couple := lerpf(0.62, 0.28, clampf(speed / MAX_SPEED, 0.0, 1.0))
-			horizontal = horizontal.lerp(face_dir * speed, couple * delta * 9.0)
-
-		var turn_dir := wrapf(wish_angle - _facing, -PI, PI)
-		var lean_target := 0.0
-		var turning := absf(turn_dir) > 0.08
-		var moving := speed > 1.2 or wish.length_squared() > 0.15
-		if turning and moving:
-			lean_target = clampf(-turn_dir * 1.9, -CARVE_LEAN_MAX, CARVE_LEAN_MAX)
-			lean_target *= clampf(speed / 3.5, 0.4, 1.0)
-			if not on_floor:
-				lean_target *= 0.3
-			# Light Session bleed — keep skate. arc readability (not mushy brake).
-			if on_floor:
-				var bleed := 1.0 - clampf(absf(turn_dir) * 0.35, 0.0, 0.16)
-				horizontal *= bleed
-		_board_lean = lerpf(_board_lean, lean_target, 11.0 * delta)
+		horizontal = _grind_move(horizontal, Vector3.ZERO, delta)
 	else:
-		var fric := FRICTION if speed > 2.0 else BRAKE_FRICTION
-		horizontal = horizontal.move_toward(Vector3.ZERO, fric * control * delta)
-		_board_lean = lerpf(_board_lean, 0.0, 16.0 * delta)
-		if absf(_board_lean) < 0.02:
-			_board_lean = 0.0
-
+		var forward := get_facing_forward()
+		var forward_speed := horizontal.dot(forward)
+		var speed_abs := absf(forward_speed)
+		var steer_authority := clampf((speed_abs - 0.25) / 1.8, 0.0, 1.0)
+		var turn_rate := lerpf(1.75, 0.8, clampf(speed_abs / MAX_SPEED, 0.0, 1.0)) if grounded else AIR_TURN
+		var reverse_sign := -1.0 if forward_speed < -0.05 else 1.0
+		_facing = wrapf(_facing - steer * turn_rate * steer_authority * reverse_sign * delta, -PI, PI)
+		if grounded:
+			# Rebuild from the freshly-carved heading. Grip removes sideways drift while
+			# preserving signed momentum, including predictable low-speed reverse.
+			forward = get_facing_forward()
+			forward_speed = horizontal.dot(forward)
+			forward_speed = move_toward(forward_speed, 0.0, FRICTION * delta)
+			if brake > 0.05:
+				if forward_speed > 0.3:
+					forward_speed = move_toward(forward_speed, 0.0, BRAKE_FRICTION * brake * delta)
+				else:
+					forward_speed = move_toward(forward_speed, -REVERSE_SPEED, REVERSE_ACCEL * brake * delta)
+			var push_power := _consume_push_stroke()
+			if push_power > 0.0 and brake < 0.1:
+				if forward_speed < 0.0:
+					# A forward push cleanly changes direction instead of consuming a
+					# whole animation cycle merely to cancel a tiny reverse roll.
+					forward_speed = minf(MAX_SPEED, forward_speed + PUSH_IMPULSE * push_power)
+				else:
+					var speed_ratio := clampf(forward_speed / MAX_SPEED, 0.0, 1.0)
+					var impulse_scale := lerpf(1.0, PUSH_IMPULSE_AT_MAX_SPEED, speed_ratio)
+					forward_speed = minf(MAX_SPEED, forward_speed + PUSH_IMPULSE * impulse_scale * push_power)
+				push_stroke.emit(push_power)
+			horizontal = forward * forward_speed
+			# Gravity along banks adds downhill speed and makes uphill lines cost momentum.
+			var downhill := Vector3.DOWN.slide(get_floor_normal()) * GRAVITY
+			horizontal += Vector3(downhill.x, 0.0, downhill.z) * delta
+			_signed_speed = forward_speed
+		else:
+			_signed_speed = horizontal.dot(forward)
+		# In air, body yaw changes without steering the ballistic trajectory.
+		var lean_target := steer * CARVE_LEAN_MAX * clampf(speed / 6.0, 0.0, 1.0) if grounded else 0.0
+		_board_lean = lerpf(_board_lean, lean_target, 1.0 - exp(-10.0 * delta))
+	if mesh:
+		mesh.rotation.y = _facing
 	velocity.x = horizontal.x
 	velocity.z = horizontal.z
-
-	_update_board_visuals(delta, on_floor or _grinding)
-	_recover_secondary(delta)
-
+	var impact_speed := maxf(-velocity.y, 0.0)
 	move_and_slide()
 	_update_grind_state()
+	if is_on_floor() and not _grinding and _airborne and not popped:
+		_on_landed(clampf(impact_speed / 16.0, 0.15, 1.0))
+	_update_board_visuals(delta, (is_on_floor() and not popped) or _grinding)
+	_recover_secondary(delta)
 	_was_on_floor = is_on_floor()
 
 
@@ -200,6 +231,50 @@ func get_speed_mph() -> float:
 	return get_horizontal_speed() * SPEED_MPH_SCALE
 
 
+func get_push_phase() -> float:
+	return _push_phase
+
+
+func is_pushing() -> bool:
+	return _push_was_down
+
+
+func get_steer_input() -> float:
+	return _steer_input
+
+
+func get_brake_input() -> float:
+	return _brake_input
+
+
+func get_signed_speed() -> float:
+	return _signed_speed
+
+
+func _update_push_cycle(push: float, delta: float) -> void:
+	var pushing := push > 0.05 and is_on_floor() and not _grinding
+	if not pushing:
+		_push_phase = 0.0
+		_push_was_down = false
+		_push_power = 0.0
+		return
+	_push_power = push
+	if not _push_was_down:
+		# A tap always gives one responsive stroke. Holding repeats at a readable
+		# foot cadence for keyboard and controller accessibility.
+		_push_phase = 1.0
+		_push_was_down = true
+		return
+	_push_phase += delta / PUSH_CYCLE_SECONDS
+
+
+func _consume_push_stroke() -> float:
+	if not _push_was_down or _push_phase < 1.0:
+		return 0.0
+	_push_phase = fmod(_push_phase, 1.0)
+	return _push_power
+
+
 
 
 ## Tricks upgrades the in-air name (kickflip/heelflip/180/shuv/tre) after ollie pop.
@@ -228,19 +303,24 @@ func _grind_move(horizontal: Vector3, wish: Vector3, delta: float) -> Vector3:
 
 
 func _update_grind_state() -> void:
+	if _grind_cooldown > 0.0 or velocity.y > 0.5:
+		return
 	var hit := _find_grind_collision()
 	var speed := Vector3(velocity.x, 0.0, velocity.z).length()
 	var speed_ok := speed >= GRIND_MIN_SPEED * 0.4 or _grinding
 	var can_lock := hit.has("axis") and speed_ok
+	if not _grinding and _tricks and _tricks.has_method("is_trick_caught"):
+		can_lock = can_lock and bool(_tricks.call("is_trick_caught"))
 	if can_lock:
-		_grind_axis = hit["axis"]
+		_grind_axis = _rail_axis(hit.get("collider") as Node3D, hit["axis"])
 		var pt: Vector3 = hit["point"]
 		# Sit on rail top — origin ≈ feet; never lerp into the collider (QA sink).
-		var target_y := pt.y - GRIND_FOOT_CLEAR
+		var target_y := pt.y + GRIND_FOOT_CLEAR
 		_grind_grace = 0.22
 		if not _grinding:
 			_grinding = true
 			_airborne = false
+			_active_air_trick = ""
 			grind_started.emit()
 			_play_sfx_grind_start()
 			var rail := str(hit.get("rail", ""))
@@ -318,8 +398,8 @@ func _find_grind_by_ray() -> Dictionary:
 	var space := get_world_3d().direct_space_state
 	if space == null:
 		return {}
-	var origin := global_position + Vector3(0.0, 1.1, 0.0)
-	var dest := global_position + Vector3(0.0, -0.35, 0.0)
+	var origin := global_position + Vector3(0.0, 0.18, 0.0)
+	var dest := global_position + Vector3(0.0, -0.18, 0.0)
 	var q := PhysicsRayQueryParameters3D.create(origin, dest)
 	q.collide_with_areas = false
 	q.collide_with_bodies = true
@@ -379,9 +459,8 @@ func _find_grind_by_proximity() -> Dictionary:
 		var closest := _closest_grind_point(n3)
 		var d: float = closest["d"]
 		var top: Vector3 = closest["top"]
-		# Prefer plaza-named rails for G1 (slight distance bias).
-		var label := _street_rail_label(n3)
-		var score := d - (0.55 if label != "" else 0.0)
+		# Choose the nearest physical rail within the small catch radius.
+		var score := d
 		if score < best_d:
 			best_d = score
 			best = n3
@@ -423,8 +502,9 @@ func _closest_grind_point(n3: Node3D) -> Dictionary:
 		)
 		var world := xf * clamped
 		var d := Vector3(global_position.x - world.x, 0.0, global_position.z - world.z).length()
-		var dy := absf(global_position.y - world.y)
-		if dy > 1.85:
+		var top_world := xf * Vector3(clamped.x, half.y, clamped.z)
+		var dy := absf(global_position.y - top_world.y)
+		if dy > 0.3:
 			continue
 		if d < best_d:
 			best_d = d
@@ -433,12 +513,7 @@ func _closest_grind_point(n3: Node3D) -> Dictionary:
 			best_top = xf * top_local
 			found = true
 	if not found:
-		var d0 := Vector3(
-			global_position.x - n3.global_position.x,
-			0.0,
-			global_position.z - n3.global_position.z
-		).length()
-		return {"d": d0, "top": best_top}
+		return {"d": INF, "top": best_top}
 	return {"d": best_d, "top": best_top}
 
 
@@ -449,7 +524,7 @@ func _do_ollie(from_grind: bool = false) -> void:
 	var boost := GRIND_OLLIE_BOOST if from_grind else OLLIE_FORWARD_BOOST
 	horizontal += forward * boost
 	if from_grind:
-		horizontal += _grind_axis * 1.2 * signf(horizontal.dot(_grind_axis) + 0.001)
+		grind_ended.emit()
 	if horizontal.length() > MAX_SPEED * 1.1:
 		horizontal = horizontal.limit_length(MAX_SPEED * 1.1)
 	velocity.x = horizontal.x
@@ -458,6 +533,7 @@ func _do_ollie(from_grind: bool = false) -> void:
 		_play_sfx_grind_end()
 	_grinding = false
 	_grind_rail = ""
+	_grind_cooldown = 0.3
 	_airborne = true
 	_active_air_trick = "ollie"
 	_ollie_squash()
@@ -498,11 +574,14 @@ func _update_board_visuals(delta: float, on_surface: bool) -> void:
 		pitch = clampf(-velocity.y * 0.028, -0.4, 0.22)
 	elif _grinding:
 		pitch = -0.06
-	board.rotation.x = lerpf(board.rotation.x, pitch, 12.0 * delta)
-	board.rotation.z = lerpf(board.rotation.z, _board_lean, 12.0 * delta)
+	_board_pitch = lerpf(_board_pitch, pitch, 1.0 - exp(-12.0 * delta))
+	var trick_rotation := Vector3.ZERO
+	if _tricks and _tricks.has_method("get_board_trick_rotation"):
+		trick_rotation = _tricks.call("get_board_trick_rotation")
+	board.rotation = Vector3(_board_pitch, 0.0, _board_lean) + trick_rotation
 	if rider:
-		rider.rotation.x = board.rotation.x * 0.45
-		rider.rotation.z = board.rotation.z * 0.7
+		rider.rotation.x = _board_pitch * 0.45
+		rider.rotation.z = _board_lean * 0.7
 	if mesh:
 		# Never pitch MeshPivot (idle ~45° back lean bug). Roll only while carving.
 		mesh.rotation.x = 0.0
@@ -522,10 +601,12 @@ func _ollie_squash() -> void:
 	# skate. pop squash — quick crouch→stretch, honest not carnival.
 	if mesh == null:
 		return
-	var tw := create_tween()
-	tw.tween_property(mesh, "scale", Vector3(1.2, 0.62, 1.2), 0.04)
-	tw.tween_property(mesh, "scale", Vector3(0.94, 1.16, 0.94), 0.07)
-	tw.tween_property(mesh, "scale", Vector3.ONE, 0.1)
+	if _pop_tween and _pop_tween.is_valid():
+		_pop_tween.kill()
+	_pop_tween = create_tween()
+	_pop_tween.tween_property(mesh, "scale", Vector3(1.03, 0.9, 1.03), 0.04)
+	_pop_tween.tween_property(mesh, "scale", Vector3(0.99, 1.04, 0.99), 0.07)
+	_pop_tween.tween_property(mesh, "scale", Vector3.ONE, 0.1)
 
 
 func _land_squash(impact: float = 0.5) -> void:
@@ -545,25 +626,25 @@ func _land_squash(impact: float = 0.5) -> void:
 		cam = get_viewport().get_camera_3d()
 	if cam and cam.has_method("apply_punch"):
 		# Unmistakable FOV land punch (Session PASS bar) — cite NfY46Ho_dEo.
-		var punch_s := clampf(1.05 + impact * 0.75, 1.05, 1.6)
+		var punch_s := clampf(0.2 + impact * 0.4, 0.2, 0.6)
 		cam.call_deferred("apply_punch", punch_s, 0.34)
 
 	if mesh == null:
 		return
 
-	var base_y := mesh.position.y
-	var board_base_y := board.position.y if board else 0.0
-	var board_base_scale := board.scale if board else Vector3.ONE
+	var base_y := _mesh_rest_y
+	var board_base_y := _board_rest_y
+	var board_base_scale := _board_rest_scale
 
-	# Whole rider assembly sinks + flattens (MeshPivot), hold, then pop back.
+	# Small compression keeps landings readable without distorting the rider.
 	mesh.scale = Vector3.ONE
 	_land_tween = create_tween()
 	_land_tween.set_parallel(true)
-	_land_tween.tween_property(mesh, "scale", Vector3(1.55, 0.28, 1.55), 0.08)
-	_land_tween.tween_property(mesh, "position:y", base_y - 0.36, 0.08)
+	_land_tween.tween_property(mesh, "scale", Vector3(1.03, 0.88, 1.03), 0.08)
+	_land_tween.tween_property(mesh, "position:y", base_y - 0.08, 0.08)
 	if board:
-		_land_tween.tween_property(board, "scale", board_base_scale * Vector3(1.2, 0.35, 1.2), 0.09)
-		_land_tween.tween_property(board, "position:y", board_base_y - 0.06, 0.09)
+		_land_tween.tween_property(board, "scale", board_base_scale * Vector3.ONE, 0.09)
+		_land_tween.tween_property(board, "position:y", board_base_y, 0.09)
 	_land_tween.set_parallel(false)
 	_land_tween.tween_interval(0.10)
 	_land_tween.set_parallel(true)
@@ -653,3 +734,57 @@ func _load_wav_stream(path: String) -> AudioStreamWAV:
 	stream.data = pcm
 	return stream
 
+
+
+func _capture_spawn() -> void:
+	_spawn_position = global_position
+
+
+func reset_to_spawn() -> void:
+	if _grinding:
+		grind_ended.emit()
+	_grinding = false
+	_grind_rail = ""
+	_grind_grace = 0.0
+	_grind_cooldown = 0.3
+	_play_sfx_grind_end()
+	if _tricks and _tricks.has_method("notify_bailed"):
+		_tricks.call("notify_bailed")
+	for tween in [_land_tween, _pop_tween]:
+		if tween and tween.is_valid():
+			tween.kill()
+	global_position = _spawn_position
+	velocity = Vector3.ZERO
+	_facing = 0.0
+	_board_lean = 0.0
+	_board_pitch = 0.0
+	_push_phase = 0.0
+	_push_was_down = false
+	_push_power = 0.0
+	_steer_input = 0.0
+	_brake_input = 0.0
+	_signed_speed = 0.0
+	_jump_buffer = 0.0
+	_coyote_time = 0.0
+	_airborne = false
+	_active_air_trick = ""
+	mesh.position.y = _mesh_rest_y
+	mesh.scale = Vector3.ONE
+	mesh.rotation = Vector3.ZERO
+	board.position.y = _board_rest_y
+	board.scale = _board_rest_scale
+	board.rotation = Vector3.ZERO
+
+
+func _rail_axis(collider: Node3D, fallback: Vector3) -> Vector3:
+	if collider == null:
+		return fallback
+	for child in collider.find_children("*", "CollisionShape3D", true, false):
+		var shape_node := child as CollisionShape3D
+		if shape_node.shape is BoxShape3D:
+			var box := shape_node.shape as BoxShape3D
+			var axis := shape_node.global_basis.x if box.size.x > box.size.z else shape_node.global_basis.z
+			axis.y = 0.0
+			if axis.length_squared() > 0.01:
+				return axis.normalized()
+	return fallback

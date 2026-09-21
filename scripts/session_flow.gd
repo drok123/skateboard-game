@@ -34,7 +34,6 @@ const EXIT_SPEED_MIN := 3.5
 const GAP_SPEED_MIN := 4.5
 const GAP_LAND_SPEED_MIN := 1.5
 const GAP_ARM_SEC := 2.5
-const STREET_GRIND_PROXIMITY := 2.2
 
 ## Plaza grind props only — ignore west planter / bowl coping for G1.
 const STREET_GRIND_NAMES := ["Flatbar", "StairsA", "Ledge", "LongLedge"]
@@ -183,82 +182,21 @@ func _horizontal_speed() -> float:
 	return Vector3(_player.velocity.x, 0.0, _player.velocity.z).length()
 
 
-func _is_street_grind_prop(node: Node) -> bool:
-	if node == null:
-		return false
-	# Bowl coping is not the warm-up plaza line.
-	if node.is_in_group("coping"):
-		return false
-	var n := node
-	while n:
-		var name_str := String(n.name)
-		for want in STREET_GRIND_NAMES:
-			if name_str == want or name_str.begins_with(want):
-				return true
-		n = n.get_parent()
-	return false
-
-
 func _touching_street_grindable() -> bool:
 	if _player == null or not _in_street:
 		return false
-	# Physics grind lock on a plaza rail = G1 clear (toast path separate).
-	if _player.has_method("is_grinding") and _player.call("is_grinding"):
-		if _player.has_method("get_grind_rail"):
-			var rail := str(_player.call("get_grind_rail"))
-			if rail != "" and _name_is_street_rail(rail):
-				return true
-		# Locked while in street zone — soft beta clear.
-		return true
-	# Prefer fat slide contacts from Props.
-	for i in _player.get_slide_collision_count():
-		var col := _player.get_slide_collision(i)
-		var collider = col.get_collider()
-		if collider is Node and (collider as Node).is_in_group("grindable"):
-			if _is_street_grind_prop(collider as Node):
-				return true
-	# Closest-point proximity (long Flatbar ends miss center-distance).
-	for node in get_tree().get_nodes_in_group("grindable"):
-		if node is Node3D and _is_street_grind_prop(node):
-			if _xz_near_grind_box(node as Node3D, STREET_GRIND_PROXIMITY):
-				return true
-	return false
-
+	# Credit the actual physics lock, never a nearby rail or a side collision.
+	if not _player.has_method("is_grinding") or not _player.call("is_grinding"):
+		return false
+	if not _player.has_method("get_grind_rail"):
+		return false
+	return _name_is_street_rail(str(_player.call("get_grind_rail")))
 
 func _name_is_street_rail(name_str: String) -> bool:
 	for want in STREET_GRIND_NAMES:
 		if name_str == want or name_str.begins_with(want):
 			return true
 	return false
-
-
-func _xz_near_grind_box(n3: Node3D, max_d: float) -> bool:
-	var best := INF
-	var feet := _player.global_position
-	for cs in n3.find_children("*", "CollisionShape3D", true, false):
-		if not (cs is CollisionShape3D):
-			continue
-		var shape_node := cs as CollisionShape3D
-		if shape_node.shape == null or not (shape_node.shape is BoxShape3D):
-			continue
-		var box := shape_node.shape as BoxShape3D
-		var xf := shape_node.global_transform
-		var local := xf.affine_inverse() * feet
-		var half := box.size * 0.5
-		var clamped := Vector3(
-			clampf(local.x, -half.x, half.x),
-			clampf(local.y, -half.y, half.y),
-			clampf(local.z, -half.z, half.z)
-		)
-		var world := xf * clamped
-		var d := Vector3(feet.x - world.x, 0.0, feet.z - world.z).length()
-		var top := xf * Vector3(clamped.x, half.y, clamped.z)
-		if absf(feet.y - top.y) > 1.6:
-			continue
-		best = minf(best, d)
-	if best == INF:
-		best = Vector3(feet.x - n3.global_position.x, 0.0, feet.z - n3.global_position.z).length()
-	return best <= max_d
 
 
 func _evaluate_active_goal() -> void:
@@ -290,8 +228,8 @@ func _try_stair_gap() -> void:
 			_gap_was_airborne = true
 	# Clear: leave the volume and land flat with leftover speed.
 	if _gap_armed and not _in_stairs_b and _player.is_on_floor() and speed >= GAP_LAND_SPEED_MIN:
-		# Prefer a real gap (was airborne) but allow fast roll-clear for soft beta.
-		if _gap_was_airborne or speed >= GAP_SPEED_MIN:
+		# A rolling pass is not a gap: require an airborne attempt.
+		if _gap_was_airborne:
 			_gap_armed = false
 			_gap_was_airborne = false
 			_advance("cleared")

@@ -8,7 +8,7 @@ See **[docs/soft-motion-rigging.md](soft-motion-rigging.md)** (Art Direction) an
 
 **Hard rule:** soft secondary motion (hair first, then tasteful soft-body) is **ONLY** after:
 
-1. A live `Skeleton3D` on the playable Emily import, and
+1. A live `Skeleton3D` on the playable Emily import (now present), and
 2. Material slots for at least **skin / hair / clothing**.
 
 **Never** enable hair springs, soft-body, or jiggle on the unskinned stance GLB. Idle/push AnimationPlayer stubs today are subtle root scale/Y only — not soft secondary.
@@ -17,7 +17,7 @@ See **[docs/soft-motion-rigging.md](soft-motion-rigging.md)** (Art Direction) an
 
 | Role | Path | Rule |
 |------|------|------|
-| **Playable** | `res://assets/characters/emily_skater_stance.glb` | Load this. Narrow stance mesh, upright on board. |
+| **Playable** | `res://assets/characters/emily_skater_skinned.glb` | Preferred runtime asset; stance GLB remains the fallback. |
 | **T-pose archive** | `res://assets/characters/emily_skater.glb` | Art/rig source only. **Do not load** as playable. |
 | **Look ref** | `references/character/emily_venz_look.jpg` | Identity / silhouette |
 
@@ -41,9 +41,10 @@ Player
 │   ├── Board                          ← MeshInstance3D deck; Y synced via deck_top_y
 │   ├── Rider                          ← lean proxy ONLY; mesh=null, visible=false
 │   ├── Emily                          ← instance of scenes/characters/emily.tscn
-│   │   ├── EmilyMesh                  ← imported stance GLB root (runtime)
-│   │   │   └── [future Skeleton3D]    ← name TBD once skinned export exists
-│   │   └── BoardSocket                ← Marker3D at feet/deck contact
+│   │   ├── EmilyMesh                  ← imported skinned GLB root (runtime)
+│   │   │   └── Skeleton3D             ← 18-bone procedural pose target
+│   │   ├── BoardSocket                ← Marker3D at feet/deck contact
+│   │   └── ProceduralAnimator         ← cruise/push/carve/air/catch/land poses + foot IK
 │   └── LookTarget
 ├── PlayerInput
 ├── AnimationPlayer                    ← TrickClips stubs (idle/push have tracks)
@@ -81,16 +82,17 @@ Created at runtime by `scripts/trick_system.gd` into the Player `AnimationPlayer
 
 Clip names must keep matching `scripts/trick_clips.gd` (`LOCOMOTION` + `V1_TRICKS`).
 
-## Future skinned contract
+## Runtime animation contract
 
-When Art exports a weighted GLB:
+The current weighted GLB is intentionally lightweight. `emily_procedural_animator.gd`
+ports the timing and pose rules from the user's `skater-test` project to this rig:
 
-1. Point playable import at the skinned file (or swap `STANCE_GLB` / `skinned_glb_path` after validation).
-2. Expect `Skeleton3D` under `EmilyMesh` (exact node name TBD — `emily_visual.gd` already caches via `get_skeleton()`).
-3. Prefer `BoneAttachment3D` (or reparent) for board socket → replace `BoardSocket` Marker3D handoff.
-4. Prefer character-local or Player `AnimationPlayer` clips authored on bones; keep **TrickClips** names.
-5. Material slots: skin, hair, clothing (eyes optional) — then soft motion per `docs/soft-motion-rigging.md`.
-6. **No soft secondary until steps 2 + materials land.**
+1. Both feet settle across the deck during cruise; the front foot stays planted during a push.
+2. The rear foot performs lift, plant, power stroke, toe-off and deck return over ~0.88 s.
+3. Ollies move through pop, asymmetric tuck, catch and landing compression.
+4. Hips lead weight transfer while the head counterbalances the torso.
+5. `TrickSystem` remains the source of trick names and scoring; the animator reads its state only.
+6. Soft secondary motion still waits for a dedicated hair rig.
 
 ## Explicit non-goals (this milestone)
 

@@ -1,372 +1,301 @@
 extends Node3D
-## Venice Beach skatepark blockout: street plaza SOUTH (−Z), bowl cluster NORTH (+Z).
-## Orientation: Z+ = north. Simple bowls only (cylinder floor + 8 wall slabs + 4 coping).
-## Venice: bowls N / street S. QA3: solid dark wells (no pale banks), deep orange sand.
+## Venice Beach-inspired native park surface based on the supplied aerials and the
+## authorized skater-test builder. It is a playable interpretation, not survey data.
 
 const StairsSetScene := preload("res://scenes/parks/modules/stairs_set.tscn")
 const LedgeScene := preload("res://scenes/parks/modules/ledge.tscn")
 const FlatbarScene := preload("res://scenes/parks/modules/flatbar.tscn")
 const ManualPadScene := preload("res://scenes/parks/modules/manual_pad.tscn")
 const BankQpScene := preload("res://scenes/parks/modules/bank_qp.tscn")
-const PerimeterWallScene := preload("res://scenes/parks/modules/perimeter_wall.tscn")
 const PlanterRoundScene := preload("res://scenes/parks/modules/planter_round.tscn")
 
-## Playable concrete pad (X × Z). Deck top at Y = 0.
-const DECK_SIZE := Vector2(48.0, 40.0)
-const WALL_H := 1.1
-## Stronger beach read vs white deck (QA readability).
-const COLOR_SAND_APRON := Color(0.98, 0.68, 0.28)
-const COLOR_BOWL_FLOOR := Color(0.18, 0.22, 0.26)
-const COLOR_BOWL_WELL := Color(0.22, 0.26, 0.30)
-const COLOR_DECK := Color(0.90, 0.88, 0.84)
-## South street entrance, facing north (+Z) into the park.
+const PARK_WIDTH := 48.0
+const PARK_DEPTH := 40.0
+const CORNER_RADIUS := 5.0
+const SURFACE_RESOLUTION := 0.5
 const SPAWN_POS := Vector3(-6.0, 1.2, -16.0)
+const COLOR_DECK := Color(0.58, 0.57, 0.54)
+const COLOR_FEATURE := Color(0.66, 0.65, 0.61)
+const COLOR_METAL := Color(0.09, 0.105, 0.12)
+const COLOR_SAND := Color(0.82, 0.68, 0.43)
+
+var _deck_material: Material
 
 
 func _ready() -> void:
+	var concrete_shader := load("res://materials/park/concrete_procedural.gdshader") as Shader
+	if concrete_shader:
+		var shader_material := ShaderMaterial.new()
+		shader_material.shader = concrete_shader
+		_deck_material = shader_material
+	else:
+		_deck_material = PropKit.mat(COLOR_DECK, 0.96, 0.0)
+		_deck_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_build()
 
 
 func _build() -> void:
-	for c in get_children():
-		remove_child(c)
-		c.free()
-	_build_sand_apron()
-	_build_deck_plates()
-	_build_perimeter()
+	for child in get_children():
+		remove_child(child)
+		child.free()
+	_build_sand_surround()
+	_build_ride_surface()
 	_build_street_plaza()
-	_build_snake_bowls()
-	_build_clover_bowl()
+	_build_coping()
+	_build_perimeter_details()
 	_build_palms()
 	_build_zones()
-	# Spawn marker (Mission Flow / debug)
 	var spawn := Marker3D.new()
 	spawn.name = "SpawnPoint"
 	spawn.position = SPAWN_POS
 	add_child(spawn)
 
 
-func _build_sand_apron() -> void:
-	# Wide beach surround (~12 m beyond walls) under/around perimeter — still OOB.
-	# Slightly lower than deck so concrete lip stays readable (don't bury the deck).
-	PropKit.add_box(
-		self,
-		Vector3(DECK_SIZE.x + 24.0, 0.28, DECK_SIZE.y + 24.0),
-		Vector3(0.0, -0.42, 0.0),
-		COLOR_SAND_APRON,
-		PackedStringArray(["out_of_bounds"])
-	)
-	# Thin sand berm just outside the wall ring (visual beach pile-up, still OOB).
-	# Berm skipped — edge box strips read as white slab clutter in QA.
+func _build_sand_surround() -> void:
+	# Separate beach patches cannot show through the recessed bowl bottoms.
+	PropKit.add_box(self, Vector3(20.0, 0.25, 66.0), Vector3(-34.0, -0.28, 0.0), COLOR_SAND, PackedStringArray(["out_of_bounds"]))
+	PropKit.add_box(self, Vector3(20.0, 0.25, 66.0), Vector3(34.0, -0.28, 0.0), COLOR_SAND, PackedStringArray(["out_of_bounds"]))
+	PropKit.add_box(self, Vector3(48.0, 0.25, 13.0), Vector3(0.0, -0.28, 26.5), COLOR_SAND, PackedStringArray(["out_of_bounds"]))
+	PropKit.add_box(self, Vector3(48.0, 0.25, 13.0), Vector3(0.0, -0.28, -26.5), COLOR_SAND, PackedStringArray(["out_of_bounds"]))
+	PropKit.add_box(self, Vector3(82.0, 0.2, 70.0), Vector3(0.0, -3.8, 0.0), COLOR_SAND, PackedStringArray(["out_of_bounds"]))
 
 
-
-func _build_deck_plates() -> void:
-	# Coarse deck plates: solid south street; holes only for north bowls — no apron filler spam.
-	var plates: Array = [
-		# Solid south street plaza (z −20 .. 0)
-		[Vector3(48.0, 0.4, 20.0), Vector3(0.0, -0.2, -10.0)],
-		# North strip beyond bowls (z ~16..20)
-		[Vector3(48.0, 0.4, 4.0), Vector3(0.0, -0.2, 18.0)],
-		# West of snake bowls
-		[Vector3(12.0, 0.4, 16.0), Vector3(-18.0, -0.2, 8.0)],
-		# East of clover / east planter pad
-		[Vector3(8.0, 0.4, 16.0), Vector3(20.0, -0.2, 8.0)],
-		# Mid strip south of bowls / north of street (leaves bowl openings north)
-		[Vector3(48.0, 0.4, 4.0), Vector3(0.0, -0.2, 2.0)],
-		# NE corner past clover lip
-		[Vector3(10.0, 0.4, 6.0), Vector3(14.0, -0.2, 16.0)],
-		# NW corner past snake lip
-		[Vector3(10.0, 0.4, 6.0), Vector3(-14.0, -0.2, 14.0)],
-	]
-	for p in plates:
-		PropKit.add_box(
-			self,
-			p[0],
-			p[1],
-			COLOR_DECK,
-			PackedStringArray(["deck"])
-		)
-
-
-func _build_perimeter() -> void:
-	# Rounded-rect ring of wall segments. Gap on south for entrance near spawn.
-	var half_x := DECK_SIZE.x * 0.5  # 24
-	var half_z := DECK_SIZE.y * 0.5  # 20
-	var seg := 12.0
-	# North wall (z = +half_z)
-	_wall_run(Vector3(0.0, 0.0, half_z), half_x * 2.0, 0.0, seg)
-	# East wall (x = +half_x)
-	_wall_run(Vector3(half_x, 0.0, 0.0), half_z * 2.0, -PI * 0.5, seg)
-	# West wall (x = -half_x)
-	_wall_run(Vector3(-half_x, 0.0, 0.0), half_z * 2.0, PI * 0.5, seg)
-	# South wall with entrance gap around spawn x≈−6
-	_wall_run_south_with_gap(half_x, half_z, seg)
+func _build_ride_surface() -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var x_steps := int(ceil(PARK_WIDTH / SURFACE_RESOLUTION))
+	var z_steps := int(ceil(PARK_DEPTH / SURFACE_RESOLUTION))
+	var x_min := -PARK_WIDTH * 0.5
+	var z_min := -PARK_DEPTH * 0.5
+	var dx := PARK_WIDTH / float(x_steps)
+	var dz := PARK_DEPTH / float(z_steps)
+	for zi in range(z_steps):
+		var z0 := z_min + float(zi) * dz
+		var z1 := z0 + dz
+		for xi in range(x_steps):
+			var x0 := x_min + float(xi) * dx
+			var x1 := x0 + dx
+			var center := Vector2((x0 + x1) * 0.5, (z0 + z1) * 0.5)
+			if not _inside_footprint(center.x, center.y):
+				continue
+			var a := Vector3(x0, _surface_height(x0, z0), z0)
+			var b := Vector3(x1, _surface_height(x1, z0), z0)
+			var c := Vector3(x1, _surface_height(x1, z1), z1)
+			var d := Vector3(x0, _surface_height(x0, z1), z1)
+			_add_triangle(st, a, b, c)
+			_add_triangle(st, a, c, d)
+	st.generate_normals()
+	var mesh := st.commit() as ArrayMesh
+	if mesh == null:
+		push_error("Venice park surface generation failed")
+		return
+	_add_mesh_static("VeniceRideSurface", mesh, _deck_material, PackedStringArray(["deck", "bowl"]))
 
 
-func _wall_run(center: Vector3, total_len: float, yaw: float, seg_len: float) -> void:
-	var n := maxi(int(ceil(total_len / seg_len)), 1)
-	var actual := total_len / float(n)
-	var axis := Vector3(cos(yaw), 0.0, -sin(yaw))  # along-wall direction
-	var start := center - axis * (total_len * 0.5)
-	for i in range(n):
-		var t := (float(i) + 0.5) / float(n)
-		var pos := start + axis * (total_len * t)
-		var w = PerimeterWallScene.instantiate()
-		w.length = actual
-		w.wall_height = WALL_H
-		w.rail_grindable = false
-		w.position = pos
-		w.rotation.y = yaw
-		add_child(w)
+func _inside_footprint(x: float, z: float) -> bool:
+	var qx := absf(x) - (PARK_WIDTH * 0.5 - CORNER_RADIUS)
+	var qz := absf(z) - (PARK_DEPTH * 0.5 - CORNER_RADIUS)
+	var outside := Vector2(maxf(qx, 0.0), maxf(qz, 0.0)).length() + minf(maxf(qx, qz), 0.0) - CORNER_RADIUS
+	return outside <= 0.0 or Vector2(x - 21.0, z + 7.0).length() <= 5.1
 
 
-func _wall_run_south_with_gap(half_x: float, half_z: float, seg_len: float) -> void:
-	# South face at z = -half_z, along +X from -half_x to +half_x. Gap x −10..−2 (near spawn).
-	var z := -half_z
-	var spans: Array = [
-		[-half_x, -10.0],
-		[-2.0, half_x],
-	]
-	for span in spans:
-		var x0: float = span[0]
-		var x1: float = span[1]
-		var total := x1 - x0
-		if total < 0.5:
-			continue
-		var n := maxi(int(ceil(total / seg_len)), 1)
-		var actual := total / float(n)
-		for i in range(n):
-			var x := x0 + actual * (float(i) + 0.5)
-			var w = PerimeterWallScene.instantiate()
-			w.length = actual
-			w.wall_height = WALL_H
-			w.rail_grindable = false
-			w.position = Vector3(x, 0.0, z)
-			w.rotation.y = PI  # wall faces outward (−Z)
-			add_child(w)
+func _surface_height(x: float, z: float) -> float:
+	var y := 0.0
+	# Deep west kidney, central linked snake, and east hero kidney/clover.
+	y = minf(y, _ellipse_bowl(x, z, Vector2(-12.0, 9.7), Vector2(8.4, 8.7), 2.55, 0.68))
+	y = minf(y, _ellipse_bowl(x, z, Vector2(-15.0, 14.0), Vector2(4.7, 4.2), 2.15, 0.63))
+	y = minf(y, _ellipse_bowl(x, z, Vector2(-2.2, 8.5), Vector2(5.3, 7.6), 1.55, 0.61))
+	y = minf(y, _ellipse_bowl(x, z, Vector2(1.5, 14.0), Vector2(4.2, 4.5), 1.30, 0.58))
+	y = minf(y, _ellipse_bowl(x, z, Vector2(11.2, 10.0), Vector2(7.4, 8.7), 3.05, 0.66))
+	y = minf(y, _ellipse_bowl(x, z, Vector2(15.0, 14.2), Vector2(4.4, 4.5), 2.60, 0.61))
+	y = minf(y, _ellipse_bowl(x, z, Vector2(16.4, 5.0), Vector2(3.6, 4.2), 1.25, 0.56))
+	# Raised central island creates the paired transfer channels seen in the aerial.
+	y = _raise_island(y, x, z, Vector2(7.0, 9.0), Vector2(2.0, 5.4), -0.18, 0.50)
+	if z < 3.2:
+		var plaza_blend := _smooth01(clampf((3.2 - z) / 3.2, 0.0, 1.0))
+		y = lerpf(y, 0.0, plaza_blend)
+	return y
+
+
+func _ellipse_bowl(x: float, z: float, center: Vector2, radii: Vector2, depth: float, bottom_ratio: float) -> float:
+	var radius := Vector2((x - center.x) / radii.x, (z - center.y) / radii.y).length()
+	if radius >= 1.0:
+		return 0.0
+	var inner := clampf(bottom_ratio, 0.05, 0.9)
+	if radius <= inner:
+		return -depth + 0.025 * depth * pow(radius / inner, 2.0)
+	var t := clampf((radius - inner) / (1.0 - inner), 0.0, 1.0)
+	return -depth * sqrt(maxf(0.0, 1.0 - t * t))
+
+
+func _raise_island(current_y: float, x: float, z: float, center: Vector2, radii: Vector2, top_y: float, inner_ratio: float) -> float:
+	var radius := Vector2((x - center.x) / radii.x, (z - center.y) / radii.y).length()
+	if radius >= 1.0:
+		return current_y
+	var blend := 1.0
+	if radius > inner_ratio:
+		blend = 1.0 - _smooth01((radius - inner_ratio) / (1.0 - inner_ratio))
+	return lerpf(current_y, maxf(current_y, top_y), blend)
 
 
 func _build_street_plaza() -> void:
-	# South plaza street obstacles (z roughly −16..−4).
-	# Stairs A — 3-step + hubba (SW)
 	var stairs_a = StairsSetScene.instantiate()
 	stairs_a.name = "StairsA"
-	stairs_a.step_count = 3
-	stairs_a.width = 3.0
+	stairs_a.step_count = 4
+	stairs_a.width = 4.2
+	stairs_a.tread = 0.46
 	stairs_a.with_hubba = true
-	stairs_a.with_handrail = false
-	stairs_a.position = Vector3(-10.0, 0.0, -12.0)
-	stairs_a.rotation.y = 0.0  # climb toward +Z (north / into park)
+	stairs_a.position = Vector3(-14.2, 0.0, -14.2)
 	add_child(stairs_a)
-
-	# Stairs B — 5-set + handrail
 	var stairs_b = StairsSetScene.instantiate()
 	stairs_b.name = "StairsB"
-	stairs_b.step_count = 5
-	stairs_b.width = 3.5
+	stairs_b.step_count = 6
+	stairs_b.width = 5.0
+	stairs_b.tread = 0.48
 	stairs_b.with_hubba = false
 	stairs_b.with_handrail = true
-	stairs_b.position = Vector3(-2.0, 0.0, -12.0)
-	stairs_b.rotation.y = 0.0
+	stairs_b.position = Vector3(-7.8, 0.0, -13.8)
 	add_child(stairs_b)
-
-	# Long ledge / planter
-	var ledge = LedgeScene.instantiate()
-	ledge.name = "LongLedge"
-	ledge.length = 7.0
-	ledge.depth = 0.45
-	ledge.height = 0.55
-	ledge.position = Vector3(5.0, 0.0, -8.0)
-	ledge.rotation.y = 0.0  # along +X
-	add_child(ledge)
-
-	# Flatbar
-	var bar = FlatbarScene.instantiate()
-	bar.name = "Flatbar"
-	bar.length = 5.0
-	bar.height = 0.45
-	bar.position = Vector3(11.0, 0.0, -10.0)
-	add_child(bar)
-
-	# Small bank / QP in SE street
 	var bank = BankQpScene.instantiate()
-	bank.name = "StreetBank"
-	bank.width = 4.0
-	bank.height = 1.2
-	bank.angle_deg = 30.0
-	bank.position = Vector3(14.0, 0.0, -6.0)
-	bank.rotation.y = PI * 0.5  # slope along local +Z → world −X (into plaza)
+	bank.name = "CenterBank"
+	bank.width = 6.2
+	bank.height = 0.9
+	bank.angle_deg = 16.0
+	bank.position = Vector3(0.0, 0.0, -10.2)
 	add_child(bank)
-
-	# --- Density extras (cap: 2 pads/ledges + 1 bank). XL-simple lines, readable gaps. ---
-	# ManualPad — mid plaza north of stairs; leaves spawn corridor (−6,−16) open
 	var pad = ManualPadScene.instantiate()
 	pad.name = "ManualPad"
-	pad.length = 3.5
-	pad.width = 2.2
-	pad.height = 0.28
-	pad.with_grind_lip = true
-	pad.position = Vector3(0.5, 0.0, -5.5)
-	pad.rotation.y = 0.0
+	pad.length = 5.4
+	pad.width = 2.1
+	pad.height = 0.32
+	pad.position = Vector3(1.5, 0.0, -15.2)
 	add_child(pad)
-
-	# Ledge2 — SE street line, clear gap from Flatbar / StreetBank
-	var ledge2 = LedgeScene.instantiate()
-	ledge2.name = "Ledge2"
-	ledge2.length = 5.0
-	ledge2.depth = 0.4
-	ledge2.height = 0.5
-	ledge2.position = Vector3(8.0, 0.0, -14.0)
-	ledge2.rotation.y = 0.0
-	add_child(ledge2)
-
-	# StreetBank2 — far SW turnaround only (not maximalist clutter)
-	var bank2 = BankQpScene.instantiate()
-	bank2.name = "StreetBank2"
-	bank2.width = 3.5
-	bank2.height = 1.0
-	bank2.angle_deg = 28.0
-	bank2.position = Vector3(-16.0, 0.0, -8.0)
-	bank2.rotation.y = -PI * 0.5  # slope along local +Z → world +X (into plaza)
-	add_child(bank2)
-
-	# Flow: street → bowls (near z ≈ 0), climb north into snake — wider for aerial read
-	var into_snake = BankQpScene.instantiate()
-	into_snake.name = "PlazaToSnakeBank"
-	into_snake.width = 6.0
-	into_snake.height = 1.15
-	into_snake.angle_deg = 26.0
-	into_snake.position = Vector3(-4.0, 0.0, -1.0)
-	into_snake.rotation.y = 0.0  # slope along local +Z → world +Z (into bowls)
-	add_child(into_snake)
+	var ledge = LedgeScene.instantiate()
+	ledge.name = "LongLedge"
+	ledge.length = 7.8
+	ledge.depth = 0.7
+	ledge.height = 0.48
+	ledge.position = Vector3(10.3, 0.0, -11.0)
+	add_child(ledge)
+	var ledge_low = LedgeScene.instantiate()
+	ledge_low.name = "Ledge2"
+	ledge_low.length = 4.8
+	ledge_low.depth = 0.62
+	ledge_low.height = 0.28
+	ledge_low.position = Vector3(8.2, 0.0, -15.0)
+	add_child(ledge_low)
+	var rail = FlatbarScene.instantiate()
+	rail.name = "Flatbar"
+	rail.length = 4.4
+	rail.height = 0.42
+	rail.position = Vector3(4.8, 0.0, -12.4)
+	add_child(rail)
+	var roll_in = BankQpScene.instantiate()
+	roll_in.name = "PlazaToSnakeBank"
+	roll_in.width = 7.2
+	roll_in.height = 0.7
+	roll_in.angle_deg = 14.0
+	roll_in.position = Vector3(-1.0, 0.0, -1.6)
+	add_child(roll_in)
 
 
-func _build_snake_bowls() -> void:
-	var snake := Node3D.new()
-	snake.name = "SnakeBowls"
-	add_child(snake)
-	# Two dark pits only — no wall-slab rings / hip filler boxes
-	_place_simple_bowl(snake, Vector3(-6.0, 0.0, 8.0), 4.5, 1.8)
-	_place_simple_bowl(snake, Vector3(1.0, 0.0, 10.0), 4.0, 2.1)
-	var feed = BankQpScene.instantiate()
-	feed.name = "SnakeToCloverBank"
-	feed.width = 5.0
-	feed.height = 1.5
-	feed.angle_deg = 28.0
-	feed.position = Vector3(4.5, -0.15, 10.5)
-	feed.rotation.y = -PI * 0.55
-	snake.add_child(feed)
+func _build_coping() -> void:
+	# Partial arcs keep transfer mouths open instead of making false full rings.
+	_add_coping_arc("WestBowlCoping", Vector2(-12.0, 9.7), Vector2(8.45, 8.75), 70.0, 300.0, 38)
+	_add_coping_arc("SnakeCoping", Vector2(-2.2, 8.5), Vector2(5.35, 7.65), 85.0, 270.0, 28)
+	_add_coping_arc("CloverCoping", Vector2(11.2, 10.0), Vector2(7.45, 8.75), 205.0, 480.0, 42)
 
 
-func _place_simple_bowl(parent: Node3D, center: Vector3, radius: float, depth: float) -> void:
-	## Open dark bowl (skate. read): cream deck hole + charcoal floor/walls — never pale slabs.
-	# Floor at bottom of the pit
-	PropKit.add_cylinder(
-		parent,
-		radius * 0.9,
-		0.35,
-		center + Vector3(0.0, -depth + 0.18, 0.0),
-		COLOR_BOWL_FLOOR,
-		PackedStringArray(["bowl", "deck"]),
-		24
-	)
-	# 4 thick DARK walls only (charcoal — not PropKit pale concrete)
-	var wall_n := 4
-	var chord := (TAU * radius) / float(wall_n) * 1.06
-	for i in range(wall_n):
-		var a := TAU * float(i) / float(wall_n)
-		PropKit.add_box(
-			parent,
-			Vector3(chord, depth, 0.9),
-			center + Vector3(sin(a) * radius, -depth * 0.5, -cos(a) * radius),
-			COLOR_BOWL_WELL,
-			PackedStringArray(["bowl", "deck"]),
-			Vector3(0.0, a, 0.0)
-		)
-	# Near-black coping lip
-	for i in range(4):
-		var a := TAU * float(i) / 4.0 + PI * 0.25
-		PropKit.add_box(
-			parent,
-			Vector3((TAU * radius) / 4.0 * 0.92, 0.1, 0.18),
-			center + Vector3(sin(a) * radius, 0.05, -cos(a) * radius),
-			Color(0.1, 0.1, 0.12),
-			PackedStringArray(["grindable", "coping"]),
-			Vector3(0.0, a, 0.0)
-		)
+func _add_coping_arc(node_name: String, center: Vector2, radii: Vector2, start_deg: float, end_deg: float, segments: int) -> void:
+	var root := Node3D.new()
+	root.name = node_name
+	add_child(root)
+	for index in range(segments):
+		var a0 := deg_to_rad(lerpf(start_deg, end_deg, float(index) / float(segments)))
+		var a1 := deg_to_rad(lerpf(start_deg, end_deg, float(index + 1) / float(segments)))
+		var p0 := Vector3(center.x + cos(a0) * radii.x, 0.07, center.y + sin(a0) * radii.y)
+		var p1 := Vector3(center.x + cos(a1) * radii.x, 0.07, center.y + sin(a1) * radii.y)
+		var direction := p1 - p0
+		var segment = PropKit.add_box(root, Vector3(direction.length(), 0.13, 0.13), (p0 + p1) * 0.5, COLOR_METAL, PackedStringArray(["grindable", "coping"]), Vector3(0.0, atan2(-direction.z, direction.x), 0.0))
+		segment.name = "%s_%02d" % [node_name, index]
 
 
-func _build_clover_bowl() -> void:
-	var clover := Node3D.new()
-	clover.name = "CloverBowl"
-	add_child(clover)
-	var center := Vector3(8.0, 0.0, 11.0)
-	# Hero bowl — slightly larger for aerial silhouette; still one clean cylinder
-	_place_simple_bowl(clover, center, 5.5, 2.8)
-	var hip = BankQpScene.instantiate()
-	hip.name = "CloverHip"
-	hip.width = 4.5
-	hip.height = 1.7
-	hip.angle_deg = 32.0
-	hip.position = center + Vector3(-5.8, 0.0, -3.2)
-	hip.rotation.y = PI * 0.35
-	clover.add_child(hip)
+func _build_perimeter_details() -> void:
+	PropKit.add_box(self, Vector3(15.0, 0.32, 0.5), Vector3(-15.7, 0.16, -19.4), COLOR_FEATURE, PackedStringArray(["deck"]))
+	PropKit.add_box(self, Vector3(21.0, 0.32, 0.5), Vector3(13.5, 0.16, -19.4), COLOR_FEATURE, PackedStringArray(["deck"]))
+	PropKit.add_box(self, Vector3(0.5, 0.34, 22.0), Vector3(-23.4, 0.17, -7.0), COLOR_FEATURE, PackedStringArray(["deck"]))
+	PropKit.add_box(self, Vector3(0.5, 0.34, 20.0), Vector3(23.4, 0.17, -6.0), COLOR_FEATURE, PackedStringArray(["deck"]))
 
 
 func _build_palms() -> void:
-	# East cluster — one raised planter (Props owns thin-trunk planter_round)
-	var east = PlanterRoundScene.instantiate()
-	east.name = "PalmClusterEast"
-	east.radius = 3.0
-	east.curb_height = 0.4
-	east.palm_count = 5
-	east.palm_height = 6.5
-	east.grindable_curb = true
-	east.position = Vector3(16.0, 0.0, 0.0)
-	east.rotation = Vector3.ZERO
-	add_child(east)
-
-	# A few singles along SE street edge
-	var se_spots: Array = [
-		Vector3(14.0, 0.0, -8.0),
-		Vector3(17.0, 0.0, -12.0),
-		Vector3(12.5, 0.0, -15.5),
-	]
-	for i in range(se_spots.size()):
-		var p = PlanterRoundScene.instantiate()
-		p.name = "PalmSE_%d" % i
-		p.radius = 1.4
-		p.palm_count = 1
-		p.palm_height = 6.0 + float(i) * 0.4
-		p.grindable_curb = true
-		p.position = se_spots[i]
-		p.rotation = Vector3.ZERO
-		add_child(p)
+	var terrace = PlanterRoundScene.instantiate()
+	terrace.name = "PalmTerrace"
+	terrace.radius = 4.0
+	terrace.curb_height = 0.42
+	terrace.palm_count = 5
+	terrace.palm_height = 7.0
+	terrace.position = Vector3(20.5, 0.0, -7.0)
+	add_child(terrace)
+	for i in range(3):
+		var palm = PlanterRoundScene.instantiate()
+		palm.name = "PalmWest_%d" % i
+		palm.radius = 1.05
+		palm.palm_count = 1
+		palm.palm_height = 5.8 + float(i) * 0.4
+		palm.position = Vector3(-20.5 + float(i) * 2.1, 0.0, 16.5)
+		add_child(palm)
 
 
 func _build_zones() -> void:
-	# Mission Flow Area3D volumes — group name == node name (names kept exact).
-	# zone_snake / zone_clover cover north bowls; street south.
-	_add_zone("zone_street", Vector3(0.0, 2.0, -10.0), Vector3(42.0, 6.0, 20.0))
-	_add_zone("zone_snake", Vector3(-5.0, 0.0, 10.0), Vector3(20.0, 8.0, 16.0))
-	_add_zone("zone_clover", Vector3(8.0, -0.5, 11.0), Vector3(17.0, 8.0, 15.0))
-	_add_zone("zone_stairs_b", Vector3(-2.0, 1.5, -11.0), Vector3(6.0, 4.0, 6.0))
+	_add_zone("zone_street", Vector3(0.0, 2.0, -10.0), Vector3(43.0, 6.0, 20.0))
+	_add_zone("zone_snake", Vector3(-2.0, -0.4, 9.5), Vector3(20.0, 8.0, 18.0))
+	_add_zone("zone_clover", Vector3(12.0, -0.7, 10.5), Vector3(16.0, 9.0, 18.0))
+	_add_zone("zone_stairs_b", Vector3(-7.8, 1.5, -12.5), Vector3(7.0, 4.0, 7.0))
 
 
 func _add_zone(zone_name: String, pos: Vector3, size: Vector3) -> void:
 	var area := Area3D.new()
 	area.name = zone_name
-	area.monitoring = true
-	area.monitorable = true
-	# Player CharacterBody3D uses collision_layer 2.
 	area.collision_layer = 0
 	area.collision_mask = 2
 	area.add_to_group(zone_name)
 	area.position = pos
-	var col := CollisionShape3D.new()
+	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
 	shape.size = size
-	col.shape = shape
-	area.add_child(col)
+	collision.shape = shape
+	area.add_child(collision)
 	add_child(area)
+
+
+func _add_mesh_static(node_name: String, mesh: ArrayMesh, material: Material, groups: PackedStringArray) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.name = node_name
+	for group in groups:
+		body.add_to_group(group)
+	var visual := MeshInstance3D.new()
+	visual.name = "Mesh"
+	visual.mesh = mesh
+	visual.material_override = material
+	body.add_child(visual)
+	var shape := mesh.create_trimesh_shape()
+	if shape != null:
+		var collision := CollisionShape3D.new()
+		collision.shape = shape
+		body.add_child(collision)
+	add_child(body)
+	return body
+
+
+func _add_triangle(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
+	st.set_uv(Vector2(a.x * 0.11, a.z * 0.11))
+	st.add_vertex(a)
+	st.set_uv(Vector2(b.x * 0.11, b.z * 0.11))
+	st.add_vertex(b)
+	st.set_uv(Vector2(c.x * 0.11, c.z * 0.11))
+	st.add_vertex(c)
+
+
+func _smooth01(value: float) -> float:
+	var x := clampf(value, 0.0, 1.0)
+	return x * x * (3.0 - 2.0 * x)
