@@ -26,12 +26,14 @@ var combo: int = 0
 @onready var _resume_button: Button = $PauseOverlay/Center/PausePanel/PauseMargin/VBox/ResumeButton
 @onready var _quit_button: Button = $PauseOverlay/Center/PausePanel/PauseMargin/VBox/QuitButton
 
-var _player: CharacterBody3D
+var _player: Node
 var _trick_system: Node
 var _tricks_connected: bool = false
 var _toast_tween: Tween
 var _hint_grace_done: bool = false
 var _hint_dismissed: bool = false
+var _last_pos: Vector3 = Vector3.ZERO
+var _have_last_pos: bool = false
 
 
 func _ready() -> void:
@@ -56,8 +58,13 @@ func _process(_delta: float) -> void:
 	if _player == null or not is_instance_valid(_player):
 		_resolve_player()
 	_try_connect_trick_system()
-	_update_speed()
 	_try_dismiss_hint_from_play()
+
+
+func _physics_process(delta: float) -> void:
+	if _player == null or not is_instance_valid(_player):
+		_resolve_player()
+	_update_speed(delta)
 
 
 func _center_toast_pivot() -> void:
@@ -123,14 +130,36 @@ func dismiss_controls_hint() -> void:
 
 
 func _resolve_player() -> void:
+	var candidate: Node = null
 	if player_path != NodePath() and has_node(player_path):
-		_player = get_node(player_path) as CharacterBody3D
-	if _player == null:
+		candidate = get_node(player_path)
+	if candidate == null:
 		var nodes := get_tree().get_nodes_in_group("player")
 		if not nodes.is_empty():
-			_player = nodes[0] as CharacterBody3D
+			candidate = nodes[0]
+	if candidate == null:
+		var found := get_tree().root.find_child("Player", true, false)
+		if found is Node:
+			candidate = found
+	if candidate != null and _is_speed_source(candidate):
+		if _player != candidate:
+			_have_last_pos = false
+		_player = candidate
+	else:
+		_player = null
 	# TrickSystem may appear after player; connect once when found.
 	_try_connect_trick_system()
+
+
+func _is_speed_source(node: Node) -> bool:
+	## Accept CharacterBody3D or any node exposing velocity / HUD speed helpers.
+	if node is CharacterBody3D:
+		return true
+	if node.has_method("get_speed_mph") or node.has_method("get_horizontal_speed"):
+		return true
+	if "velocity" in node:
+		return true
+	return false
 
 
 func _try_connect_trick_system() -> void:
@@ -174,14 +203,33 @@ func _on_trick_bailed() -> void:
 	reset_combo()
 
 
-func _update_speed() -> void:
+func _update_speed(delta: float = 0.0) -> void:
 	var speed := 0.0
-	if _player:
+	if _player and is_instance_valid(_player):
 		if _player.has_method("get_speed_mph"):
 			speed = float(_player.get_speed_mph())
-		else:
-			var h := Vector3(_player.velocity.x, 0.0, _player.velocity.z)
-			speed = h.length() * 2.15
+		elif _player.has_method("get_horizontal_speed"):
+			speed = float(_player.get_horizontal_speed()) * 2.15
+		elif "velocity" in _player:
+			var vel: Vector3 = _player.velocity
+			speed = Vector3(vel.x, 0.0, vel.z).length() * 2.15
+		elif _player is CharacterBody3D:
+			var real: Vector3 = (_player as CharacterBody3D).get_real_velocity()
+			speed = Vector3(real.x, 0.0, real.z).length() * 2.15
+
+		# Fallback: velocity source wrong/zero but body is actually moving.
+		if speed < 0.15 and delta > 0.0 and "global_position" in _player:
+			var pos: Vector3 = _player.global_position
+			if _have_last_pos:
+				var moved := Vector3(pos.x - _last_pos.x, 0.0, pos.z - _last_pos.z).length()
+				var from_pos := (moved / delta) * 2.15
+				if from_pos > speed:
+					speed = from_pos
+			_last_pos = pos
+			_have_last_pos = true
+		elif "global_position" in _player:
+			_last_pos = _player.global_position
+			_have_last_pos = true
 	# Integer mph readout — Physics scales game units for readable playtest feedback.
 	_speed_label.text = "%d mph" % int(round(speed))
 
