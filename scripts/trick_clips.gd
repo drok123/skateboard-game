@@ -1,4 +1,5 @@
 class_name TrickClips
+extends RefCounted
 ## Named AnimationPlayer clips for flatground v1 (beta toast names).
 
 const LOCOMOTION := [
