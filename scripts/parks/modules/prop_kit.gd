@@ -1,15 +1,17 @@
 class_name PropKit
 extends RefCounted
 ## Shared helpers for collision-friendly skate park primitives.
-## Palette from docs/style-bible.md (lightweight, not a beauty pass).
+## Palette from docs/style-bible.md + skate. plaza readability
+## (dark metal lips on simple boxes — cite -Mi9EKoBCSg / HK5sBzPsMGc).
 
 
-## Pale Venice deck concrete (#C8C4BC).
+## Pale Venice deck concrete (#C8C4BC) — matte so daylight doesn't wash white.
 const COLOR_CONCRETE := Color(0.784, 0.769, 0.737)
 ## Cooler bowl / underside read (#8E959A).
 const COLOR_CONCRETE_COOL := Color(0.557, 0.584, 0.604)
-## Coping / rails / fence metal (#A8ADB2).
-const COLOR_METAL := Color(0.659, 0.678, 0.698)
+## Dark plaza metal for lip/rail silhouette vs pale concrete (#2E3236).
+## Was #A8ADB2 (too close to deck → washed furniture).
+const COLOR_METAL := Color(0.18, 0.20, 0.21)
 ## Beach apron sand (#D9C7A0).
 const COLOR_SAND := Color(0.851, 0.780, 0.627)
 const COLOR_SOIL := Color(0.28, 0.2, 0.12)
@@ -30,12 +32,16 @@ static func mat(color: Color, roughness: float = 0.85, metallic: float = 0.0) ->
 static func mat_for(color: Color) -> StandardMaterial3D:
 	## Pick rough/metal defaults from palette role.
 	if color.is_equal_approx(COLOR_METAL):
-		return mat(color, 0.45, 0.55)
+		# Soft metal, not chrome — edge reads without glare.
+		return mat(color, 0.55, 0.7)
 	if color.is_equal_approx(COLOR_SAND):
-		return mat(color, 0.92, 0.0)
+		return mat(color, 0.95, 0.0)
 	if color.is_equal_approx(COLOR_PALM_FROND):
 		return mat(color, 0.88, 0.0)
-	return mat(color, 0.85, 0.0)
+	if color.is_equal_approx(COLOR_CONCRETE) or color.is_equal_approx(COLOR_CONCRETE_COOL):
+		# High roughness — kill washed-out daylight sheen on slabs.
+		return mat(color, 0.94, 0.0)
+	return mat(color, 0.9, 0.0)
 
 
 static func add_box(
