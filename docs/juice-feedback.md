@@ -94,3 +94,13 @@ Target feel: https://www.youtube.com/watch?v=NfY46Ho_dEo — weighty, same-frame
 
 Coord with Physics on land stick / grind lock frames so juice never leads physics.
 
+## skate. juice bar (FIRST)
+
+Playful land/ollie/grind punches like skate. trailers — honest, not carnival. No particle storms.
+
+| Event | Cam | SFX / toast |
+|-------|-----|-------------|
+| Ollie | `apply_juice_punch(&"ollie")` ~110 ms lift | `sfx_ollie` same frame |
+| Land | `apply_punch` Session PASS (~0.32 s, FOV×14) — do not soften | `sfx_land` same contact frame |
+| Grind lock | `apply_juice_punch(&"grind")` ~100 ms tuck | SFX + HUD "Grind — …" same frame as Physics toast |
+

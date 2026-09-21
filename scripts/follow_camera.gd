@@ -44,19 +44,54 @@ func _ready() -> void:
 		look_at(_look_position(_yaw), Vector3.UP)
 
 
-## Session land punch — unmistakable FOV kick (PASS bar). Do not soften for skate. cam.
+## Session land punch — unmistakable FOV kick (PASS bar). Do not soften.
 func apply_punch(strength: float, duration: float = 0.28) -> void:
 	strength = clampf(strength, 0.0, 1.6)
 	if strength < 0.05:
 		return
+	_start_punch(
+		Vector3(0.0, -0.55 * strength, 0.12 * strength),
+		14.0 * strength,
+		duration,
+		Tween.TRANS_CUBIC,
+	)
+
+
+## skate. trailer juice — playful, honest, not carnival. Land uses apply_punch (PASS).
+func apply_juice_punch(kind: StringName, strength: float = 1.0) -> void:
+	strength = clampf(strength, 0.0, 1.2)
+	match kind:
+		&"land":
+			apply_punch(clampf(strength, 0.5, 1.5), 0.32)
+		&"ollie":
+			# Pop lift + short FOV blossom (skate. trailer).
+			_start_punch(
+				Vector3(0.0, 0.1 * strength, -0.05 * strength),
+				7.0 * strength,
+				0.11,
+				Tween.TRANS_QUAD,
+			)
+		&"grind":
+			# Lock-in tuck with toast — light dip, no particle carnival.
+			_start_punch(
+				Vector3(0.0, -0.1 * strength, 0.04 * strength),
+				5.0 * strength,
+				0.1,
+				Tween.TRANS_QUAD,
+			)
+		_:
+			apply_punch(strength, 0.2)
+
+
+func _start_punch(offset: Vector3, fov_add: float, duration: float, trans: int) -> void:
 	if _punch_tween and _punch_tween.is_valid():
 		_punch_tween.kill()
-	_punch_offset = Vector3(0.0, -0.55 * strength, 0.12 * strength)
-	_punch_fov_add = 14.0 * strength
+	_punch_offset = offset
+	_punch_fov_add = fov_add
 	_punch_tween = create_tween()
 	_punch_tween.set_parallel(true)
-	_punch_tween.tween_property(self, "_punch_offset", Vector3.ZERO, duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	_punch_tween.tween_property(self, "_punch_fov_add", 0.0, duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_punch_tween.tween_property(self, "_punch_offset", Vector3.ZERO, duration).set_trans(trans).set_ease(Tween.EASE_OUT)
+	_punch_tween.tween_property(self, "_punch_fov_add", 0.0, duration).set_trans(trans).set_ease(Tween.EASE_OUT)
 
 
 func _physics_process(delta: float) -> void:

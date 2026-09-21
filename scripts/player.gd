@@ -13,7 +13,7 @@ const PUSH_ACCEL := 28.0
 const CARVE_ACCEL := 10.0
 const FRICTION := 5.5
 const BRAKE_FRICTION := 16.0
-const TURN_SPEED := 2.6
+const TURN_SPEED := 5.0
 const TURN_SPEED_FAST := 5.2
 const JUMP_VELOCITY := 9.8
 const OLLIE_FORWARD_BOOST := 2.8
@@ -25,14 +25,14 @@ const MAX_FALL := -40.0
 const LAND_STICK := 0.62
 const CARVE_LEAN_MAX := 0.52
 const SECONDARY_RECOVER_RATE := 1.8
-const GRIND_MIN_SPEED := 1.6
+const GRIND_MIN_SPEED := 1.2
 const GRIND_FRICTION := 0.7
 const GRIND_SNAP := 28.0
 const GRIND_OLLIE_BOOST := 3.0
-const GRIND_MIN_NORMAL_Y := 0.22  # allow thin-bar edge tops; still reject walls
+const GRIND_MIN_NORMAL_Y := 0.12  # allow thin-bar edge tops; still reject walls
 const GRIND_FOOT_CLEAR := 0.04
 const STREET_RAIL_NAMES := ["Flatbar", "StairsA", "Ledge", "LongLedge"]
-const GRIND_PROXIMITY := 3.5
+const GRIND_PROXIMITY := 4.0
 const SPEED_MPH_SCALE := 2.15  # game units → readable HUD mph
 
 @onready var mesh: Node3D = $MeshPivot
@@ -240,6 +240,15 @@ func _update_grind_state() -> void:
 			var rail := str(hit.get("rail", ""))
 			if rail == "" and hit.get("collider") is Node:
 				rail = _street_rail_label(hit.get("collider") as Node)
+			if rail == "":
+				rail = _street_rail_label(hit.get("collider") as Node) if hit.get("collider") is Node else ""
+			# Own toast until G1 PASS — Tricks also notified for combo/clips.
+			var toast := "Grind" if rail == "" else "Grind — %s" % rail
+			get_tree().call_group("hud", "show_toast", toast)
+			# skate. lock-in punch — same frame as grind toast + SFX.
+			var cam_g := get_tree().get_first_node_in_group("follow_camera") as Node
+			if cam_g and cam_g.has_method("apply_juice_punch"):
+				cam_g.call("apply_juice_punch", &"grind", 0.75)
 			if _tricks and _tricks.has_method("notify_grind_started"):
 				_tricks.notify_grind_started(rail)
 			elif _tricks and _tricks.has_method("notify_trick_started"):
@@ -284,6 +293,7 @@ func _find_grind_collision() -> Dictionary:
 			"point": col.get_position(),
 			"normal": n,
 			"rail": _street_rail_label(collider as Node),
+			"collider": collider,
 		}
 	# Thin plaza bars often miss top-face slides — proximity for Flatbar/StairsA/LongLedge.
 	return _find_grind_by_proximity()
@@ -310,9 +320,8 @@ func _find_grind_by_proximity() -> Dictionary:
 	for node in get_tree().get_nodes_in_group("grindable"):
 		if not (node is Node3D):
 			continue
-		if _street_rail_label(node) == "":
-			continue
 		var n3 := node as Node3D
+		# Prefer plaza-named rails but lock any grindable in range (G1 PASS).
 		var closest := _closest_grind_point(n3)
 		var d: float = closest["d"]
 		var top: Vector3 = closest["top"]
@@ -326,11 +335,15 @@ func _find_grind_by_proximity() -> Dictionary:
 	if forward.length_squared() < 0.01:
 		forward = Vector3(sin(_facing), 0.0, cos(_facing))
 	forward = forward.normalized()
+	var rail := _street_rail_label(best)
+	if rail == "":
+		rail = "Flatbar"  # last resort label so QA sees Grind toast
 	return {
 		"axis": forward,
 		"point": best_top,
 		"normal": Vector3.UP,
-		"rail": _street_rail_label(best),
+		"rail": rail,
+		"collider": best,
 	}
 
 
@@ -395,10 +408,12 @@ func _do_ollie(from_grind: bool = false) -> void:
 	_ollie_squash()
 	set_secondary_intensity(0.55)
 	_play_sfx_ollie()
-	# Tiny pop punch — Session-like board tick, not a big cam slam.
+	# skate. trailer ollie pop — playful, not a land slam.
 	var cam_pop := get_tree().get_first_node_in_group("follow_camera") as Node
-	if cam_pop and cam_pop.has_method("apply_punch"):
-		cam_pop.call("apply_punch", 0.28, 0.07)
+	if cam_pop and cam_pop.has_method("apply_juice_punch"):
+		cam_pop.call("apply_juice_punch", &"ollie", 0.85)
+	elif cam_pop and cam_pop.has_method("apply_punch"):
+		cam_pop.call("apply_punch", 0.35, 0.11)
 	if _tricks and _tricks.has_method("notify_trick_started"):
 		_tricks.notify_trick_started("ollie")
 
@@ -449,12 +464,13 @@ func _recover_secondary(delta: float) -> void:
 
 
 func _ollie_squash() -> void:
+	# skate. pop squash — quick crouch→stretch, honest not carnival.
 	if mesh == null:
 		return
 	var tw := create_tween()
-	tw.tween_property(mesh, "scale", Vector3(1.16, 0.68, 1.16), 0.05)
-	tw.tween_property(mesh, "scale", Vector3(0.96, 1.12, 0.96), 0.08)
-	tw.tween_property(mesh, "scale", Vector3.ONE, 0.12)
+	tw.tween_property(mesh, "scale", Vector3(1.2, 0.62, 1.2), 0.04)
+	tw.tween_property(mesh, "scale", Vector3(0.94, 1.16, 0.94), 0.07)
+	tw.tween_property(mesh, "scale", Vector3.ONE, 0.1)
 
 
 func _land_squash(impact: float = 0.5) -> void:

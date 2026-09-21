@@ -70,7 +70,7 @@ max_distance = 24.0
 
 [node name="SfxGrindStart" type="AudioStreamPlayer3D" parent="."]
 bus = &"Master"
-volume_db = -3.0
+volume_db = -1.5
 max_distance = 20.0
 
 [node name="SfxGrindLoop" type="AudioStreamPlayer3D" parent="."]
