@@ -62,9 +62,23 @@ func _sync_board_deck() -> void:
 	if board == null:
 		return
 	var half_thick := 0.04
-	if board.mesh is BoxMesh:
-		half_thick = (board.mesh as BoxMesh).size.y * 0.5
+	if board.has_method("deck_thickness"):
+		half_thick = float(board.call("deck_thickness")) * 0.5
+	else:
+		half_thick = _deck_half_thickness(board)
 	board.position = Vector3(0.0, deck_top_y - half_thick, 0.0)
+
+
+func _deck_half_thickness(board: MeshInstance3D) -> float:
+	## Deck mesh only (BoxMesh.size.y or AABB) — ignore child trucks/wheels.
+	var mesh := board.mesh
+	if mesh is BoxMesh:
+		return maxf((mesh as BoxMesh).size.y * 0.5, 0.001)
+	if mesh != null:
+		var aabb := mesh.get_aabb()
+		if aabb.size.y > 0.001:
+			return aabb.size.y * 0.5
+	return 0.04
 
 
 func _load_emily() -> void:

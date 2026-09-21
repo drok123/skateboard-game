@@ -1,79 +1,112 @@
 extends MeshInstance3D
-## Replaces the fat slab BoxMesh with a readable skateboard: thin deck, trucks, wheels.
-## Physics still owns Board node path + lean/tilt on this node.
+## Street deck extras parented to `$MeshPivot/Board`.
+## Board stays a MeshInstance3D so player.gd can lean/pitch this node; trucks and
+## wheels are children so they ride the same rotation. No GLB required.
 
 const DECK_SIZE := Vector3(0.52, 0.04, 1.28)
 const TRUCK_SIZE := Vector3(0.42, 0.05, 0.12)
 const WHEEL_RADIUS := 0.045
 const WHEEL_WIDTH := 0.055
+const WHEELBASE := 0.76
 
 
 func _ready() -> void:
 	_rebuild()
 
 
+func deck_thickness() -> float:
+	return _mesh_height(mesh, DECK_SIZE.y)
+
+
 func _rebuild() -> void:
-	# Clear procedural children; keep this MeshInstance as deck.
 	for c in get_children():
 		c.queue_free()
-
 	var deck := BoxMesh.new()
 	deck.size = DECK_SIZE
 	mesh = deck
+	material_override = _mat_deck_top()
+	# Inset underside so the slightly lighter top rim reads from the side.
+	_add_box(
+		"DeckUnderside",
+		Vector3(DECK_SIZE.x - 0.012, 0.018, DECK_SIZE.z - 0.03),
+		Vector3(0.0, -DECK_SIZE.y * 0.25, 0.0),
+		_mat_deck_underside()
+	)
+	var z_front := WHEELBASE * 0.5
+	var truck_y := -DECK_SIZE.y * 0.5 - TRUCK_SIZE.y * 0.5
+	var truck_mat := _mat_truck()
+	_add_box("TruckFront", TRUCK_SIZE, Vector3(0.0, truck_y, z_front), truck_mat)
+	_add_box("TruckBack", TRUCK_SIZE, Vector3(0.0, truck_y, -z_front), truck_mat)
+	var wheel_mat := _mat_wheel()
+	var wheel_x := TRUCK_SIZE.x * 0.5 + WHEEL_WIDTH * 0.35
+	var wheel_y := -DECK_SIZE.y * 0.5 - TRUCK_SIZE.y - WHEEL_RADIUS * 0.15
+	_add_wheel("WheelFL", Vector3(-wheel_x, wheel_y, z_front), wheel_mat)
+	_add_wheel("WheelFR", Vector3(wheel_x, wheel_y, z_front), wheel_mat)
+	_add_wheel("WheelBL", Vector3(-wheel_x, wheel_y, -z_front), wheel_mat)
+	_add_wheel("WheelBR", Vector3(wheel_x, wheel_y, -z_front), wheel_mat)
 
-	var mat_deck := StandardMaterial3D.new()
-	mat_deck.albedo_color = Color(0.42, 0.28, 0.16)  # wood top read
-	mat_deck.roughness = 0.65
-	material_override = mat_deck
 
-	var mat_grip := StandardMaterial3D.new()
-	mat_grip.albedo_color = Color(0.12, 0.12, 0.13)
-	mat_grip.roughness = 0.95
+func _add_box(node_name: String, size: Vector3, pos: Vector3, mat: Material) -> void:
+	var mi := MeshInstance3D.new()
+	mi.name = node_name
+	var box := BoxMesh.new()
+	box.size = size
+	mi.mesh = box
+	mi.position = pos
+	mi.material_override = mat
+	add_child(mi)
 
-	# Thin grip tape on top
-	var grip := MeshInstance3D.new()
-	grip.name = "GripTape"
-	var grip_mesh := BoxMesh.new()
-	grip_mesh.size = Vector3(DECK_SIZE.x * 0.92, 0.008, DECK_SIZE.z * 0.92)
-	grip.mesh = grip_mesh
-	grip.position = Vector3(0.0, DECK_SIZE.y * 0.5 + 0.004, 0.0)
-	grip.material_override = mat_grip
-	add_child(grip)
 
-	var mat_metal := StandardMaterial3D.new()
-	mat_metal.albedo_color = Color(0.55, 0.55, 0.58)
-	mat_metal.metallic = 0.7
-	mat_metal.roughness = 0.35
+func _add_wheel(node_name: String, pos: Vector3, mat: Material) -> void:
+	var mi := MeshInstance3D.new()
+	mi.name = node_name
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = WHEEL_RADIUS
+	cyl.bottom_radius = WHEEL_RADIUS
+	cyl.height = WHEEL_WIDTH
+	cyl.radial_segments = 12
+	mi.mesh = cyl
+	mi.position = pos
+	# Cylinder is Y-up; roll 90° so the axle runs along +X.
+	mi.rotation.z = PI * 0.5
+	mi.material_override = mat
+	add_child(mi)
 
-	var mat_wheel := StandardMaterial3D.new()
-	mat_wheel.albedo_color = Color(0.85, 0.85, 0.88)
-	mat_wheel.roughness = 0.4
 
-	for z_sign in [-1.0, 1.0]:
-		var truck := MeshInstance3D.new()
-		truck.name = "Truck_%s" % ("nose" if z_sign > 0.0 else "tail")
-		var tmesh := BoxMesh.new()
-		tmesh.size = TRUCK_SIZE
-		truck.mesh = tmesh
-		truck.position = Vector3(0.0, -DECK_SIZE.y * 0.5 - TRUCK_SIZE.y * 0.5, z_sign * 0.38)
-		truck.material_override = mat_metal
-		add_child(truck)
+func _mesh_height(m: Mesh, fallback: float) -> float:
+	if m is BoxMesh:
+		return maxf((m as BoxMesh).size.y, 0.001)
+	if m != null:
+		var aabb := m.get_aabb()
+		if aabb.size.y > 0.001:
+			return aabb.size.y
+	return fallback
 
-		for x_sign in [-1.0, 1.0]:
-			var wheel := MeshInstance3D.new()
-			wheel.name = "Wheel_%s_%s" % [truck.name, "L" if x_sign < 0.0 else "R"]
-			var wmesh := CylinderMesh.new()
-			wmesh.top_radius = WHEEL_RADIUS
-			wmesh.bottom_radius = WHEEL_RADIUS
-			wmesh.height = WHEEL_WIDTH
-			wmesh.radial_segments = 10
-			wheel.mesh = wmesh
-			# Cylinder default is Y-up; lay on X for axle.
-			wheel.rotation.z = PI * 0.5
-			wheel.position = Vector3(
-				x_sign * (TRUCK_SIZE.x * 0.5 + WHEEL_WIDTH * 0.35),
-				-DECK_SIZE.y * 0.5 - TRUCK_SIZE.y - WHEEL_RADIUS * 0.15,
-				z_sign * 0.38
-			)
-			wheel.material_override = mat_wheel
-			add_child(wheel)
+
+func _named_mat(mat_name: String, albedo: Color, roughness: float, metallic: float = 0.0) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.resource_name = mat_name
+	m.albedo_color = albedo
+	m.roughness = roughness
+	m.metallic = metallic
+	return m
+
+
+func _mat_deck_top() -> StandardMaterial3D:
+	## Slightly lighter dark wood than the underside so flip orientation reads.
+	return _named_mat("Mat_deck_top", Color(0.20, 0.14, 0.10), 0.90)
+
+
+func _mat_deck_underside() -> StandardMaterial3D:
+	## Solid dark wood — no graphics this pass.
+	return _named_mat("Mat_deck_underside", Color(0.12, 0.08, 0.06), 0.92)
+
+
+func _mat_truck() -> StandardMaterial3D:
+	## Cooler metal hangers — lighter than charcoal wheels so disks separate.
+	return _named_mat("Mat_truck", Color(0.50, 0.54, 0.58), 0.42, 0.68)
+
+
+func _mat_wheel() -> StandardMaterial3D:
+	## Dark charcoal rubber, matte. Albedo 0.12–0.18; darker than trucks.
+	return _named_mat("Mat_wheel", Color(0.14, 0.14, 0.15), 0.92)

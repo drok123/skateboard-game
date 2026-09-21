@@ -30,12 +30,35 @@ static func mat(color: Color, roughness: float = 0.85, metallic: float = 0.0) ->
 static func mat_for(color: Color) -> StandardMaterial3D:
 	## Pick rough/metal defaults from palette role.
 	if color.is_equal_approx(COLOR_METAL):
-		return mat(color, 0.45, 0.55)
+		return mat_metal_visual()
 	if color.is_equal_approx(COLOR_SAND):
 		return mat(color, 0.92, 0.0)
 	if color.is_equal_approx(COLOR_PALM_FROND):
 		return mat(color, 0.88, 0.0)
 	return mat(color, 0.85, 0.0)
+
+
+static func mat_metal_visual() -> StandardMaterial3D:
+	## Non-grindable rails / legs: same #A8ADB2, duller (feel/debug tell).
+	return mat(COLOR_METAL, 0.62, 0.32)
+
+
+static func mat_grind_metal() -> StandardMaterial3D:
+	## Grindable lips (coping / flatbar / hubba): same #A8ADB2, shinier.
+	return mat(COLOR_METAL, 0.28, 0.78)
+
+
+static func _has_grindable(groups: PackedStringArray) -> bool:
+	for g in groups:
+		if g == "grindable":
+			return true
+	return false
+
+
+static func _material_for_body(color: Color, groups: PackedStringArray) -> StandardMaterial3D:
+	if _has_grindable(groups) and color.is_equal_approx(COLOR_METAL):
+		return mat_grind_metal()
+	return mat_for(color)
 
 
 static func add_box(
@@ -60,7 +83,7 @@ static func add_box(
 	var box := BoxMesh.new()
 	box.size = size
 	mesh_i.mesh = box
-	mesh_i.material_override = mat_for(color)
+	mesh_i.material_override = _material_for_body(color, groups)
 	body.add_child(mesh_i)
 	parent.add_child(body)
 	return body
@@ -92,7 +115,7 @@ static func add_cylinder(
 	cyl.height = height
 	cyl.radial_segments = radial_segments
 	mesh_i.mesh = cyl
-	mesh_i.material_override = mat_for(color)
+	mesh_i.material_override = _material_for_body(color, groups)
 	body.add_child(mesh_i)
 	parent.add_child(body)
 	return body
