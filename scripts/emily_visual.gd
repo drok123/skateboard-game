@@ -109,8 +109,8 @@ func _load_emily() -> void:
 	# Deck contact under Emily — handoff point for future BoneAttachment.
 	_ensure_board_socket(Vector3(0.0, deck_top_y - sole_sink, 0.0))
 	# Upright at rest (P0: no back lean). Tiny forward offset for stance silhouette only.
-	root.rotation.x = deg_to_rad(-2.0)  # slight forward crouch, never back
-	root.position.z += 0.02
+	# Mild crouch is baked in stance GLB verts only — no script pitch/Z (Physics + P0).
+	root.rotation.x = 0.0
 
 
 func _ensure_board_socket(local_pos: Vector3) -> void:
