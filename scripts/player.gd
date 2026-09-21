@@ -13,8 +13,8 @@ const PUSH_ACCEL := 28.0
 const CARVE_ACCEL := 10.0
 const FRICTION := 5.5
 const BRAKE_FRICTION := 16.0
-const TURN_SPEED := 2.4
-const TURN_SPEED_FAST := 3.6
+const TURN_SPEED := 4.2
+const TURN_SPEED_FAST := 2.2
 const JUMP_VELOCITY := 9.8
 const OLLIE_FORWARD_BOOST := 2.8
 const AIR_CONTROL := 0.22
@@ -100,30 +100,35 @@ func apply_movement(wish: Vector3, jump_pressed: bool, delta: float) -> void:
 		var target := wish * MAX_SPEED
 		horizontal = horizontal.move_toward(target, accel * control * delta)
 
-		var turn := TURN_SPEED
+		# skate. Flick-It arcs: responsive yaw at low speed, stable at high (-Mi9EKoBCSg).
+		var turn := AIR_TURN
 		if on_floor:
-			turn = lerpf(TURN_SPEED, TURN_SPEED_FAST, clampf(speed / MAX_SPEED, 0.0, 1.0))
-		else:
-			turn = AIR_TURN
+			var spd_t := clampf(speed / MAX_SPEED, 0.0, 1.0)
+			turn = lerpf(TURN_SPEED, TURN_SPEED_FAST, spd_t)
 		_facing = lerp_angle(_facing, wish_angle, turn * delta)
 		if mesh:
 			mesh.rotation.y = _facing
 
+		# Couple horizontal velocity toward facing so carve arcs read (board goes where you look).
+		if on_floor and speed > 1.0:
+			var face_dir := Vector3(sin(_facing), 0.0, cos(_facing))
+			var couple := lerpf(0.55, 0.22, clampf(speed / MAX_SPEED, 0.0, 1.0))
+			horizontal = horizontal.lerp(face_dir * speed, couple * delta * 8.0)
+
 		var turn_dir := wrapf(wish_angle - _facing, -PI, PI)
-		# Lean only while carving/accelerating — upright at rest (P0 idle lean).
 		var lean_target := 0.0
-		var turning := absf(turn_dir) > 0.10
-		var moving := speed > 1.5 or wish.length_squared() > 0.2
+		var turning := absf(turn_dir) > 0.08
+		var moving := speed > 1.2 or wish.length_squared() > 0.15
 		if turning and moving:
-			lean_target = clampf(-turn_dir * 2.1, -CARVE_LEAN_MAX, CARVE_LEAN_MAX)
-			lean_target *= clampf(speed / 4.0, 0.35, 1.0)
+			lean_target = clampf(-turn_dir * 1.9, -CARVE_LEAN_MAX, CARVE_LEAN_MAX)
+			lean_target *= clampf(speed / 3.5, 0.4, 1.0)
 			if not on_floor:
 				lean_target *= 0.3
-			# Session carve weight: bleed speed into the turn.
+			# Light Session bleed — keep skate. arc readability (not mushy brake).
 			if on_floor:
-				var bleed := 1.0 - clampf(absf(turn_dir) * 0.55, 0.0, 0.28)
+				var bleed := 1.0 - clampf(absf(turn_dir) * 0.35, 0.0, 0.16)
 				horizontal *= bleed
-		_board_lean = lerpf(_board_lean, lean_target, 9.0 * delta)
+		_board_lean = lerpf(_board_lean, lean_target, 11.0 * delta)
 	else:
 		var fric := FRICTION if speed > 2.0 else BRAKE_FRICTION
 		horizontal = horizontal.move_toward(Vector3.ZERO, fric * control * delta)
@@ -152,6 +157,31 @@ func get_secondary_intensity() -> float:
 
 func is_grinding() -> bool:
 	return _grinding
+
+func get_facing_yaw() -> float:
+	## Radians; +Z forward. Player Controller behind-board cam should yaw with this.
+	return _facing
+
+
+func get_facing_forward() -> Vector3:
+	return Vector3(sin(_facing), 0.0, cos(_facing))
+
+
+func get_velocity_yaw() -> float:
+	var h := Vector3(velocity.x, 0.0, velocity.z)
+	if h.length_squared() < 0.25:
+		return _facing
+	return atan2(h.x, h.z)
+
+
+func get_cam_yaw() -> float:
+	## Blend facing + velocity for skate. follow (readable carve without stuck orbit).
+	var vyaw := get_velocity_yaw()
+	var hspd := Vector3(velocity.x, 0.0, velocity.z).length()
+	var w := clampf(hspd / 6.0, 0.0, 0.65)
+	return lerp_angle(_facing, vyaw, w)
+
+
 
 func get_horizontal_speed() -> float:
 	return Vector3(velocity.x, 0.0, velocity.z).length()
