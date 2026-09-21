@@ -37,6 +37,9 @@ const SPEED_MPH_SCALE := 2.15  # game units → readable HUD mph
 @onready var _tricks: Node = get_node_or_null("TrickSystem")
 @onready var _sfx_ollie: AudioStreamPlayer3D = get_node_or_null("SfxOllie")
 @onready var _sfx_land: AudioStreamPlayer3D = get_node_or_null("SfxLand")
+@onready var _sfx_grind_start: AudioStreamPlayer3D = get_node_or_null("SfxGrindStart")
+@onready var _sfx_grind_loop: AudioStreamPlayer3D = get_node_or_null("SfxGrindLoop")
+@onready var _sfx_grind_exit: AudioStreamPlayer3D = get_node_or_null("SfxGrindExit")
 
 var _facing := 0.0
 var _was_on_floor := true
@@ -183,6 +186,7 @@ func _update_grind_state() -> void:
 			_grinding = true
 			_airborne = false
 			grind_started.emit()
+			_play_sfx_grind_start()
 			if _tricks and _tricks.has_method("notify_trick_started"):
 				_tricks.notify_trick_started("grind")
 			if hit.has("point"):
@@ -192,6 +196,7 @@ func _update_grind_state() -> void:
 	if _grinding:
 		_grinding = false
 		grind_ended.emit()
+		_play_sfx_grind_end()
 
 
 func _find_grind_collision() -> Dictionary:
@@ -227,12 +232,18 @@ func _do_ollie(from_grind: bool = false) -> void:
 		horizontal = horizontal.limit_length(MAX_SPEED * 1.1)
 	velocity.x = horizontal.x
 	velocity.z = horizontal.z
+	if _grinding or (_sfx_grind_loop and _sfx_grind_loop.playing):
+		_play_sfx_grind_end()
 	_grinding = false
 	_airborne = true
 	_active_air_trick = "ollie"
 	_ollie_squash()
 	set_secondary_intensity(0.55)
 	_play_sfx_ollie()
+	# Tiny pop punch — Session-like board tick, not a big cam slam.
+	var cam_pop := get_tree().get_first_node_in_group("follow_camera") as Node
+	if cam_pop and cam_pop.has_method("apply_punch"):
+		cam_pop.call("apply_punch", 0.28, 0.07)
 	if _tricks and _tricks.has_method("notify_trick_started"):
 		_tricks.notify_trick_started("ollie")
 
@@ -307,7 +318,8 @@ func _land_squash(impact: float = 0.5) -> void:
 	if cam == null:
 		cam = get_viewport().get_camera_3d()
 	if cam and cam.has_method("apply_punch"):
-		cam.call("apply_punch", clampf(1.0 + impact * 0.8, 1.0, 1.6), 0.36)
+		# Session-weight: same-frame thud, short settle (~120ms), impact-scaled.
+		cam.call("apply_punch", clampf(0.45 + impact * 0.55, 0.4, 1.0), 0.12)
 
 	if mesh == null:
 		return
@@ -320,19 +332,19 @@ func _land_squash(impact: float = 0.5) -> void:
 	mesh.scale = Vector3.ONE
 	_land_tween = create_tween()
 	_land_tween.set_parallel(true)
-	_land_tween.tween_property(mesh, "scale", Vector3(1.65, 0.22, 1.65), 0.1)
-	_land_tween.tween_property(mesh, "position:y", base_y - 0.45, 0.1)
+	_land_tween.tween_property(mesh, "scale", Vector3(1.28, 0.55, 1.28), 0.06)
+	_land_tween.tween_property(mesh, "position:y", base_y - 0.12, 0.06)
 	if board:
 		_land_tween.tween_property(board, "scale", board_base_scale * Vector3(1.2, 0.35, 1.2), 0.09)
 		_land_tween.tween_property(board, "position:y", board_base_y - 0.06, 0.09)
 	_land_tween.set_parallel(false)
-	_land_tween.tween_interval(0.16)
+	_land_tween.tween_interval(0.04)
 	_land_tween.set_parallel(true)
-	_land_tween.tween_property(mesh, "scale", Vector3.ONE, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_land_tween.tween_property(mesh, "position:y", base_y, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_land_tween.tween_property(mesh, "scale", Vector3.ONE, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_land_tween.tween_property(mesh, "position:y", base_y, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	if board:
-		_land_tween.tween_property(board, "scale", board_base_scale, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		_land_tween.tween_property(board, "position:y", board_base_y, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_land_tween.tween_property(board, "scale", board_base_scale, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		_land_tween.tween_property(board, "position:y", board_base_y, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 
 
@@ -348,11 +360,35 @@ func _play_sfx_land(impact: float) -> void:
 		_sfx_land.volume_db = lerpf(-8.0, 0.0, clampf(impact, 0.0, 1.0))
 		_sfx_land.play()
 
+
+func _play_sfx_grind_start() -> void:
+	if _sfx_grind_start:
+		_sfx_grind_start.play()
+	if _sfx_grind_loop and not _sfx_grind_loop.playing:
+		_sfx_grind_loop.play()
+
+
+func _play_sfx_grind_end() -> void:
+	if _sfx_grind_loop and _sfx_grind_loop.playing:
+		_sfx_grind_loop.stop()
+	if _sfx_grind_exit:
+		_sfx_grind_exit.play()
+
+
 func _ensure_sfx_streams() -> void:
 	if _sfx_ollie and _sfx_ollie.stream == null:
 		_sfx_ollie.stream = _load_wav_stream("res://assets/audio/sfx/ollie_pop.wav")
 	if _sfx_land and _sfx_land.stream == null:
 		_sfx_land.stream = _load_wav_stream("res://assets/audio/sfx/land_thud.wav")
+	if _sfx_grind_start and _sfx_grind_start.stream == null:
+		_sfx_grind_start.stream = _load_wav_stream("res://assets/audio/sfx/grind_start.wav")
+	if _sfx_grind_loop and _sfx_grind_loop.stream == null:
+		var loop_stream := _load_wav_stream("res://assets/audio/sfx/grind_loop.wav")
+		if loop_stream:
+			loop_stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+			_sfx_grind_loop.stream = loop_stream
+	if _sfx_grind_exit and _sfx_grind_exit.stream == null:
+		_sfx_grind_exit.stream = _load_wav_stream("res://assets/audio/sfx/grind_exit.wav")
 
 
 func _load_wav_stream(path: String) -> AudioStreamWAV:

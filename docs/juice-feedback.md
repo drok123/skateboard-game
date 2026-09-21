@@ -80,3 +80,17 @@ Use `AudioStreamPlayer3D` at board for spatial; keep volumes conservative so HUD
 ## Live hooks (playtest borrow)
 
 Beta: placeholder WAVs at `assets/audio/sfx/ollie_pop.wav` + `land_thud.wav` load onto `SfxOllie`/`SfxLand` at runtime. `sfx_ollie` / `sfx_land(impact)` still emit. Light `FollowCamera.apply_punch` on land. No particles yet.
+
+## Session-style timing (ref, no asset copy)
+
+Target feel: https://www.youtube.com/watch?v=NfY46Ho_dEo — weighty, same-frame feedback.
+
+| Event | Timing rule |
+|-------|-------------|
+| Ollie | SFX + tiny cam punch on pop frame (~70 ms) |
+| Land | SFX + cam punch on first floor frame; punch ~120 ms; impact scales volume/strength |
+| Grind lock | Metal chirp + scrape loop start on `grind_started` |
+| Grind exit | Cut loop + exit tick on `grind_ended` / ollie-out |
+
+Coord with Physics on land stick / grind lock frames so juice never leads physics.
+

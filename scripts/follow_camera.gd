@@ -12,6 +12,7 @@ var _look_target: Node3D
 var _base_fov := 75.0
 var _punch_offset := Vector3.ZERO
 var _punch_fov_add := 0.0
+var _punch_tween: Tween
 
 
 func _ready() -> void:
@@ -21,25 +22,25 @@ func _ready() -> void:
 		_target = get_node_or_null(target_path) as Node3D
 	if _target == null:
 		_target = get_tree().get_first_node_in_group("player") as Node3D
-	# Prefer chest LookTarget when Player Controller has placed one.
 	if _target:
 		var look := _target.get_node_or_null("MeshPivot/LookTarget") as Node3D
 		if look:
 			_look_target = look
 
 
-## Land / impact punch — FOV kick + camera dip (must read at default follow cam).
-func apply_punch(strength: float, duration: float = 0.22) -> void:
-	strength = clampf(strength, 0.0, 1.5)
-	if strength < 0.05:
+## Session-style weight: short dip + FOV on the impact frame (harder land wins).
+func apply_punch(strength: float, duration: float = 0.12) -> void:
+	strength = clampf(strength, 0.0, 1.2)
+	if strength < 0.04:
 		return
-	_punch_offset = Vector3(0.0, -0.55 * strength, 0.12 * strength)
-	_punch_fov_add = 14.0 * strength
-	var tw := create_tween()
-	tw.set_parallel(true)
-	# Weightier settle (Session-like) — less springy than BACK.
-	tw.tween_property(self, "_punch_offset", Vector3.ZERO, duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "_punch_fov_add", 0.0, duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	if _punch_tween and _punch_tween.is_valid():
+		_punch_tween.kill()
+	_punch_offset = Vector3(0.0, -0.22 * strength, 0.06 * strength)
+	_punch_fov_add = 5.5 * strength
+	_punch_tween = create_tween()
+	_punch_tween.set_parallel(true)
+	_punch_tween.tween_property(self, "_punch_offset", Vector3.ZERO, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_punch_tween.tween_property(self, "_punch_fov_add", 0.0, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 
 func _physics_process(delta: float) -> void:
