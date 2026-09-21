@@ -1,0 +1,21 @@
+# Godot 4+ specific ignores
+.godot/
+*.translation
+
+# Godot-generated import files (optional to commit; keep folder empty via .gdignore)
+# Uncomment next line if you prefer not to commit .import metadata:
+# *.import
+
+# Mono / C#
+.mono/
+data_*/
+mono_crash.*.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.vscode/
+.idea/
+*.tmp
