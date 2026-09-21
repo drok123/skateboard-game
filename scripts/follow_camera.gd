@@ -1,5 +1,5 @@
 extends Camera3D
-## skate. bar (P0 Turning & camera): behind-board follow, yaw with facing/velocity,
+## skate. bar (P0 Turning & camera): behind-board follow via Physics get_cam_yaw(),
 ## gentle look-ahead into turns. Cite p14MSdRtNIo / -Mi9EKoBCSg — no asset copy.
 ## FOV land punch stays Session-weight Pass — do not soften.
 
@@ -9,16 +9,12 @@ extends Camera3D
 @export var look_height := 1.2
 @export var look_ahead := 2.8
 @export var follow_speed := 9.0
-@export var yaw_follow_speed := 8.0
+@export var yaw_follow_speed := 8.5
 @export var look_speed := 10.0
-## 0 = face MeshPivot only; 1 = velocity yaw only.
-@export var velocity_yaw_blend := 0.5
-@export var min_speed_for_vel_yaw := 1.25
 
 var _target: Node3D
 var _look_target: Node3D
 var _body: CharacterBody3D
-var _mesh: Node3D
 var _yaw := 0.0
 var _base_fov := 75.0
 var _punch_offset := Vector3.ZERO
@@ -35,12 +31,10 @@ func _ready() -> void:
 		_target = get_tree().get_first_node_in_group("player") as Node3D
 	if _target:
 		_body = _target as CharacterBody3D
-		_mesh = _target.get_node_or_null("MeshPivot") as Node3D
 		var look := _target.get_node_or_null("MeshPivot/LookTarget") as Node3D
 		if look:
 			_look_target = look
-		_yaw = _facing_yaw()
-		# Snap behind board on first frame so we never start world-locked on +Z.
+		_yaw = _desired_yaw()
 		global_position = _desired_position(_yaw)
 		look_at(_look_position(_yaw), Vector3.UP)
 
@@ -63,7 +57,7 @@ func apply_punch(strength: float, duration: float = 0.28) -> void:
 func _physics_process(delta: float) -> void:
 	if _target == null:
 		return
-	var desired_yaw := _blend_yaw()
+	var desired_yaw := _desired_yaw()
 	_yaw = lerp_angle(_yaw, desired_yaw, 1.0 - exp(-yaw_follow_speed * delta))
 
 	var desired := _desired_position(_yaw) + _punch_offset
@@ -76,28 +70,16 @@ func _physics_process(delta: float) -> void:
 	fov = _base_fov + _punch_fov_add
 
 
-func _facing_yaw() -> float:
-	if _mesh:
-		return _mesh.rotation.y
-	if _target:
-		return _target.rotation.y
+func _desired_yaw() -> float:
+	# Prefer Physics' shared facing+velocity blend (ae0fa95+).
+	if _body and _body.has_method("get_cam_yaw"):
+		return float(_body.call("get_cam_yaw"))
+	if _body and _body.has_method("get_facing_yaw"):
+		return float(_body.call("get_facing_yaw"))
+	var mesh := _target.get_node_or_null("MeshPivot") as Node3D
+	if mesh:
+		return mesh.rotation.y
 	return _yaw
-
-
-func _blend_yaw() -> float:
-	var face := _facing_yaw()
-	if _body == null:
-		return face
-	var horiz := Vector3(_body.velocity.x, 0.0, _body.velocity.z)
-	var speed := horiz.length()
-	if speed < min_speed_for_vel_yaw:
-		return face
-	var vel_yaw := atan2(horiz.x, horiz.z)
-	# Prefer facing when nearly aligned; blend toward velocity when carving off-axis.
-	var misalign := absf(wrapf(vel_yaw - face, -PI, PI))
-	var blend := velocity_yaw_blend * clampf(misalign / 0.85, 0.35, 1.0)
-	blend *= clampf(speed / 6.0, 0.4, 1.0)
-	return lerp_angle(face, vel_yaw, blend)
 
 
 func _forward(yaw: float) -> Vector3:
@@ -116,5 +98,4 @@ func _look_position(yaw: float) -> Vector3:
 		base = _look_target.global_position
 	else:
 		base = _target.global_position + Vector3.UP * look_height
-	# Gentle look-ahead into the carve (skate. plaza cam energy).
 	return base + forward * look_ahead
