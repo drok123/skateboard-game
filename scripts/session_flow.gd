@@ -202,6 +202,14 @@ func _is_street_grind_prop(node: Node) -> bool:
 func _touching_street_grindable() -> bool:
 	if _player == null or not _in_street:
 		return false
+	# Physics grind lock on a plaza rail = G1 clear (toast path separate).
+	if _player.has_method("is_grinding") and _player.call("is_grinding"):
+		if _player.has_method("get_grind_rail"):
+			var rail := str(_player.call("get_grind_rail"))
+			if rail != "" and _name_is_street_rail(rail):
+				return true
+		# Locked while in street zone — soft beta clear.
+		return true
 	# Prefer fat slide contacts from Props.
 	for i in _player.get_slide_collision_count():
 		var col := _player.get_slide_collision(i)
@@ -209,13 +217,48 @@ func _touching_street_grindable() -> bool:
 		if collider is Node and (collider as Node).is_in_group("grindable"):
 			if _is_street_grind_prop(collider as Node):
 				return true
-	# Proximity only to plaza props (not west planter near spawn).
+	# Closest-point proximity (long Flatbar ends miss center-distance).
 	for node in get_tree().get_nodes_in_group("grindable"):
 		if node is Node3D and _is_street_grind_prop(node):
-			var n3 := node as Node3D
-			if _player.global_position.distance_to(n3.global_position) <= STREET_GRIND_PROXIMITY:
+			if _xz_near_grind_box(node as Node3D, STREET_GRIND_PROXIMITY):
 				return true
 	return false
+
+
+func _name_is_street_rail(name_str: String) -> bool:
+	for want in STREET_GRIND_NAMES:
+		if name_str == want or name_str.begins_with(want):
+			return true
+	return false
+
+
+func _xz_near_grind_box(n3: Node3D, max_d: float) -> bool:
+	var best := INF
+	var feet := _player.global_position
+	for cs in n3.find_children("*", "CollisionShape3D", true, false):
+		if not (cs is CollisionShape3D):
+			continue
+		var shape_node := cs as CollisionShape3D
+		if shape_node.shape == null or not (shape_node.shape is BoxShape3D):
+			continue
+		var box := shape_node.shape as BoxShape3D
+		var xf := shape_node.global_transform
+		var local := xf.affine_inverse() * feet
+		var half := box.size * 0.5
+		var clamped := Vector3(
+			clampf(local.x, -half.x, half.x),
+			clampf(local.y, -half.y, half.y),
+			clampf(local.z, -half.z, half.z)
+		)
+		var world := xf * clamped
+		var d := Vector3(feet.x - world.x, 0.0, feet.z - world.z).length()
+		var top := xf * Vector3(clamped.x, half.y, clamped.z)
+		if absf(feet.y - top.y) > 1.6:
+			continue
+		best = minf(best, d)
+	if best == INF:
+		best = Vector3(feet.x - n3.global_position.x, 0.0, feet.z - n3.global_position.z).length()
+	return best <= max_d
 
 
 func _evaluate_active_goal() -> void:

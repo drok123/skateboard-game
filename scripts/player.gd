@@ -13,8 +13,8 @@ const PUSH_ACCEL := 28.0
 const CARVE_ACCEL := 10.0
 const FRICTION := 5.5
 const BRAKE_FRICTION := 16.0
-const TURN_SPEED := 5.0
-const TURN_SPEED_FAST := 5.2
+const TURN_SPEED := 4.6
+const TURN_SPEED_FAST := 6.0
 const JUMP_VELOCITY := 9.8
 const OLLIE_FORWARD_BOOST := 2.8
 const AIR_CONTROL := 0.22
@@ -25,14 +25,14 @@ const MAX_FALL := -40.0
 const LAND_STICK := 0.62
 const CARVE_LEAN_MAX := 0.52
 const SECONDARY_RECOVER_RATE := 1.8
-const GRIND_MIN_SPEED := 1.2
+const GRIND_MIN_SPEED := 0.9
 const GRIND_FRICTION := 0.7
 const GRIND_SNAP := 28.0
 const GRIND_OLLIE_BOOST := 3.0
 const GRIND_MIN_NORMAL_Y := 0.12  # allow thin-bar edge tops; still reject walls
 const GRIND_FOOT_CLEAR := 0.04
 const STREET_RAIL_NAMES := ["Flatbar", "StairsA", "Ledge", "LongLedge"]
-const GRIND_PROXIMITY := 4.0
+const GRIND_PROXIMITY := 2.4
 const SPEED_MPH_SCALE := 2.15  # game units → readable HUD mph
 
 @onready var mesh: Node3D = $MeshPivot
@@ -53,6 +53,7 @@ var _active_air_trick := ""
 var _secondary_intensity := 1.0
 var _board_lean := 0.0
 var _grinding := false
+var _grind_rail := ""
 var _grind_axis := Vector3(1.0, 0.0, 0.0)
 var _land_tween: Tween
 var _grind_grace := 0.0
@@ -114,8 +115,8 @@ func apply_movement(wish: Vector3, jump_pressed: bool, delta: float) -> void:
 		# Couple horizontal velocity toward facing so carve arcs read (board goes where you look).
 		if on_floor and speed > 1.0:
 			var face_dir := Vector3(sin(_facing), 0.0, cos(_facing))
-			var couple := lerpf(0.55, 0.22, clampf(speed / MAX_SPEED, 0.0, 1.0))
-			horizontal = horizontal.lerp(face_dir * speed, couple * delta * 8.0)
+			var couple := lerpf(0.62, 0.28, clampf(speed / MAX_SPEED, 0.0, 1.0))
+			horizontal = horizontal.lerp(face_dir * speed, couple * delta * 9.0)
 
 		var turn_dir := wrapf(wish_angle - _facing, -PI, PI)
 		var lean_target := 0.0
@@ -159,6 +160,11 @@ func get_secondary_intensity() -> float:
 
 func is_grinding() -> bool:
 	return _grinding
+
+
+func get_grind_rail() -> String:
+	## Active plaza rail label for Mission G1 / HUD.
+	return _grind_rail
 
 func get_facing_yaw() -> float:
 	## Radians; +Z forward. Player Controller behind-board cam should yaw with this.
@@ -240,6 +246,7 @@ func _update_grind_state() -> void:
 			var rail := str(hit.get("rail", ""))
 			if rail == "" and hit.get("collider") is Node:
 				rail = _street_rail_label(hit.get("collider") as Node)
+			_grind_rail = rail
 			# Physics owns grind toast + juice punch; notify Tricks for combo/clips.
 			var toast := "Grind" if rail == "" else "Grind — %s" % rail
 			get_tree().call_group("hud", "show_toast", toast)
@@ -262,12 +269,23 @@ func _update_grind_state() -> void:
 			velocity.y = 0.0
 			return
 		_grinding = false
+		_grind_rail = ""
 		grind_ended.emit()
 		_play_sfx_grind_end()
 
 
 func _find_grind_collision() -> Dictionary:
-	## Top-face grindables only (Skater XL ledge clarity). Side hits caused geo sink.
+	## Top-face slides first; ray + proximity catch thin plaza lips (G1).
+	var slide := _find_grind_by_slide()
+	if slide.has("axis"):
+		return slide
+	var ray := _find_grind_by_ray()
+	if ray.has("axis"):
+		return ray
+	return _find_grind_by_proximity()
+
+
+func _find_grind_by_slide() -> Dictionary:
 	for i in get_slide_collision_count():
 		var col := get_slide_collision(i)
 		var collider := col.get_collider()
@@ -280,7 +298,6 @@ func _find_grind_collision() -> Dictionary:
 			continue
 		var axis := Vector3.UP.cross(n)
 		if axis.length_squared() < 0.01:
-			# Flat-ish top: rail runs along velocity / facing.
 			axis = Vector3(velocity.x, 0.0, velocity.z)
 		axis.y = 0.0
 		if axis.length_squared() < 0.01:
@@ -293,8 +310,46 @@ func _find_grind_collision() -> Dictionary:
 			"rail": _street_rail_label(collider as Node),
 			"collider": collider,
 		}
-	# Thin plaza bars often miss top-face slides — proximity for Flatbar/StairsA/LongLedge.
-	return _find_grind_by_proximity()
+	return {}
+
+
+func _find_grind_by_ray() -> Dictionary:
+	## Downward probe from knees — locks when skating onto Flatbar / hubba without a top-face slide.
+	var space := get_world_3d().direct_space_state
+	if space == null:
+		return {}
+	var origin := global_position + Vector3(0.0, 1.1, 0.0)
+	var dest := global_position + Vector3(0.0, -0.35, 0.0)
+	var q := PhysicsRayQueryParameters3D.create(origin, dest)
+	q.collide_with_areas = false
+	q.collide_with_bodies = true
+	q.collision_mask = collision_mask
+	q.exclude = [get_rid()]
+	var hit := space.intersect_ray(q)
+	if hit.is_empty():
+		return {}
+	var collider = hit.get("collider")
+	if collider == null or not (collider is Node):
+		return {}
+	if not (collider as Node).is_in_group("grindable"):
+		return {}
+	var n: Vector3 = hit.get("normal", Vector3.UP)
+	if n.y < GRIND_MIN_NORMAL_Y:
+		return {}
+	var speed := Vector3(velocity.x, 0.0, velocity.z).length()
+	if speed < GRIND_MIN_SPEED * 0.25 and not _grinding:
+		return {}
+	var axis := Vector3(velocity.x, 0.0, velocity.z)
+	if axis.length_squared() < 0.01:
+		axis = Vector3(sin(_facing), 0.0, cos(_facing))
+	axis = axis.normalized()
+	return {
+		"axis": axis,
+		"point": hit.get("position", global_position),
+		"normal": n,
+		"rail": _street_rail_label(collider as Node),
+		"collider": collider,
+	}
 
 
 func _street_rail_label(node: Node) -> String:
@@ -319,12 +374,16 @@ func _find_grind_by_proximity() -> Dictionary:
 		if not (node is Node3D):
 			continue
 		var n3 := node as Node3D
-		# Prefer plaza-named rails but lock any grindable in range (G1 PASS).
+		if (n3 as Node).is_in_group("coping"):
+			continue
 		var closest := _closest_grind_point(n3)
 		var d: float = closest["d"]
 		var top: Vector3 = closest["top"]
-		if d < best_d:
-			best_d = d
+		# Prefer plaza-named rails for G1 (slight distance bias).
+		var label := _street_rail_label(n3)
+		var score := d - (0.55 if label != "" else 0.0)
+		if score < best_d:
+			best_d = score
 			best = n3
 			best_top = top
 	if best == null:
@@ -365,7 +424,7 @@ func _closest_grind_point(n3: Node3D) -> Dictionary:
 		var world := xf * clamped
 		var d := Vector3(global_position.x - world.x, 0.0, global_position.z - world.z).length()
 		var dy := absf(global_position.y - world.y)
-		if dy > 1.35:
+		if dy > 1.85:
 			continue
 		if d < best_d:
 			best_d = d
@@ -398,6 +457,7 @@ func _do_ollie(from_grind: bool = false) -> void:
 	if _grinding or (_sfx_grind_loop and _sfx_grind_loop.playing):
 		_play_sfx_grind_end()
 	_grinding = false
+	_grind_rail = ""
 	_airborne = true
 	_active_air_trick = "ollie"
 	_ollie_squash()

@@ -57,7 +57,7 @@ func _rebuild() -> void:
 		# Thin grindable top lip
 		PropKit.add_box(
 			self,
-			Vector3(hubba_width * 0.95, 0.12, total_run + 0.2),
+			Vector3(hubba_width * 0.95, 0.28, total_run + 0.2),  # fatter G1 detect
 			Vector3(width * 0.5 + hubba_width * 0.5, hubba_h + 0.06, total_run * 0.5),
 			PropKit.COLOR_METAL,
 			PackedStringArray(["grindable"])
