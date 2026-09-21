@@ -11,6 +11,8 @@ References (box paths):
 - Playable stance: `assets/characters/emily_skater_stance.glb` (beta visual; single mesh)
 - T-pose / rig source: `assets/characters/emily_skater.glb` (do not show as playable)
 - Soft-motion handoff: `docs/soft-motion-rigging.md`
+- Competitor feel/look (living): `docs/reference/competitor-feel-look.md` — skate. / Session / Skater XL (inspiration only; no asset copy)
+- Session feel clip: `docs/reference/session-feel-ref.md`
 - Park mood: `references/park/venice_beach_skatepark_aerial.jpg`
 
 ## World palette
@@ -38,7 +40,7 @@ Lighting: one strong key (golden-hour lean OK), soft sky fill, mild AO in bowls 
 **Translate, don’t photocopy:**
 - The look photo is beach/lifestyle. Game outfit should still feel like *her* (athletic, coastal SoCal) but work for skating: mobility, silhouette contrast against concrete, no tiny straps that vanish at distance.
 - Prefer high-contrast clothing blocks against pale park (dark top / mid shorts, or similar) so the rider pops in Venice light.
-- Board: clean street deck, readable underside graphics optional later; keep first pass simple and dark/wood so it doesn’t fight the rider.
+- Board (Derron refs — locks Board & Surfacing): black grip top, white popsicle underside with dark NY graphic, silver trucks, white wheels. High contrast vs Emily and Venice concrete; see `docs/reference/board/`.
 
 **Materials on `emily_skater.glb` (when Squad 1 imports):**
 - Separate material slots ASAP: skin, hair, eyes, clothing, board (do not leave one `material`).
@@ -51,7 +53,18 @@ Lighting: one strong key (golden-hour lean OK), soft sky fill, mild AO in bowls 
 
 - Playable Emily uses a **dark matte athletic block** (`emily_visual.gd`) so she pops on `#C8C4BC` concrete.
 - Single material until Character Rigging splits skin / hair / clothing — then match Emily identity colors from the look ref.
-- Board stays dark wood (Board & Surfacing); do not lighten the rider into concrete-gray.
+- Board follows Derron refs (white underside / black grip / white wheels) — rider stays sun-kissed skin stand-in or real GLB mats, never blue/gray mannequin.
+
+## Board (locked refs)
+
+Derron photo refs in `docs/reference/board/` override earlier dark-wood/charcoal callouts for the **deck**:
+- Top: black grip tape
+- Bottom: white with dark NY graphic
+- Trucks: silver
+- Wheels: white
+- Shape: popsicle with kicks
+
+PropKit / Venice park palette is unchanged. Sparks stay Audio & Juice.
 
 ## Soft secondary motion (post-rig)
 
@@ -64,6 +77,16 @@ Once Core Feel has a skinned rider, add light natural soft motion (athletic / st
 - Avoid camouflage: no concrete-gray clothing, no sand-colored full fits.
 - Motion: carve lean and crouch should change the outline; keep limbs thick enough to track in air tricks.
 - Do not add busy accessories that break the outline until core clips land.
+
+## Competitor bar
+
+Living clip list + “what we take” notes: `docs/reference/competitor-feel-look.md`.
+
+- **Session** → weight, land stick, grind lock (Core Feel / Juice)
+- **skate.** → plaza flow, silhouette at distance (World / Art / Core Feel)
+- **Skater XL** → simple line parks, board-first read (Park / Board / Tricks)
+
+Inspiration only — never copy assets.
 
 ## What NOT to do
 
