@@ -13,8 +13,8 @@ const PUSH_ACCEL := 28.0
 const CARVE_ACCEL := 10.0
 const FRICTION := 5.5
 const BRAKE_FRICTION := 16.0
-const TURN_SPEED := 4.2
-const TURN_SPEED_FAST := 2.2
+const TURN_SPEED := 2.6
+const TURN_SPEED_FAST := 5.2
 const JUMP_VELOCITY := 9.8
 const OLLIE_FORWARD_BOOST := 2.8
 const AIR_CONTROL := 0.22
@@ -104,7 +104,8 @@ func apply_movement(wish: Vector3, jump_pressed: bool, delta: float) -> void:
 		var turn := AIR_TURN
 		if on_floor:
 			var spd_t := clampf(speed / MAX_SPEED, 0.0, 1.0)
-			turn = lerpf(TURN_SPEED, TURN_SPEED_FAST, spd_t)
+			# Low speed → FAST (responsive); high speed → TURN_SPEED (stable).
+			turn = lerpf(TURN_SPEED_FAST, TURN_SPEED, spd_t)
 		_facing = lerp_angle(_facing, wish_angle, turn * delta)
 		if mesh:
 			mesh.rotation.y = _facing
