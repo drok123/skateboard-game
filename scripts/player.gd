@@ -324,8 +324,8 @@ func _land_squash(impact: float = 0.5) -> void:
 	if cam == null:
 		cam = get_viewport().get_camera_3d()
 	if cam and cam.has_method("apply_punch"):
-		# Session-weight: same-frame thud, short settle (~120ms), impact-scaled.
-		cam.call("apply_punch", clampf(0.45 + impact * 0.55, 0.4, 1.0), 0.12)
+		# Unmistakable FOV land punch (PASS bar) — do not soften for juice timing.
+		cam.call("apply_punch", clampf(1.0 + impact * 0.8, 1.0, 1.6), 0.32)
 
 	if mesh == null:
 		return

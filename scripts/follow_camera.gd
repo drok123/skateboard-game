@@ -2,10 +2,10 @@ extends Camera3D
 ## Smooth third-person follow camera for the skateboarder.
 
 @export var target_path: NodePath
-@export var offset := Vector3(0.0, 4.5, 8.0)
+@export var offset := Vector3(0.0, 4.2, 8.5)
 @export var look_offset := Vector3(0.0, 1.2, 0.0)
-@export var follow_speed := 6.0
-@export var look_speed := 10.0
+@export var follow_speed := 4.2
+@export var look_speed := 7.0
 
 var _target: Node3D
 var _look_target: Node3D
@@ -28,19 +28,19 @@ func _ready() -> void:
 			_look_target = look
 
 
-## Session-style weight: short dip + FOV on the impact frame (harder land wins).
-func apply_punch(strength: float, duration: float = 0.12) -> void:
-	strength = clampf(strength, 0.0, 1.2)
-	if strength < 0.04:
+## Session land punch — unmistakable FOV kick (PASS bar from 3c7668d). Do not soften.
+func apply_punch(strength: float, duration: float = 0.28) -> void:
+	strength = clampf(strength, 0.0, 1.6)
+	if strength < 0.05:
 		return
 	if _punch_tween and _punch_tween.is_valid():
 		_punch_tween.kill()
-	_punch_offset = Vector3(0.0, -0.22 * strength, 0.06 * strength)
-	_punch_fov_add = 5.5 * strength
+	_punch_offset = Vector3(0.0, -0.55 * strength, 0.12 * strength)
+	_punch_fov_add = 14.0 * strength
 	_punch_tween = create_tween()
 	_punch_tween.set_parallel(true)
-	_punch_tween.tween_property(self, "_punch_offset", Vector3.ZERO, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	_punch_tween.tween_property(self, "_punch_fov_add", 0.0, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_punch_tween.tween_property(self, "_punch_offset", Vector3.ZERO, duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_punch_tween.tween_property(self, "_punch_fov_add", 0.0, duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
 func _physics_process(delta: float) -> void:
