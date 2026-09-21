@@ -13,13 +13,14 @@ const BOARD_SOCKET_NAME := "BoardSocket"
 const MESH_NAME := "EmilyMesh"
 
 ## Deck top in MeshPivot space (Board center + half thickness).
-@export var deck_top_y := 0.16
+@export var deck_top_y := 0.14
 @export var sole_sink := 0.02
 @export var yaw_offset := PI
 @export var model_scale := 0.92
 ## High-contrast athletic block vs pale Venice concrete (#C8C4BC).
 ## Single mesh / no UVs yet — dark matte stand-in until Character Rigging splits skin/hair/clothing.
-@export var body_albedo := Color(0.14, 0.15, 0.17, 1.0)
+@export var body_albedo := Color(0.22, 0.26, 0.32, 1.0)
+@export var accent_albedo := Color(0.55, 0.35, 0.28, 1.0)
 @export var body_roughness := 0.9
 ## Future skinned GLB path (unused until Art ships weights). Keep stance for playable.
 @export_file("*.glb") var skinned_glb_path := ""
@@ -94,6 +95,7 @@ func _load_emily() -> void:
 	var aabb := _mesh_aabb(root)
 	if aabb.size == Vector3.ZERO:
 		root.position = Vector3(0.0, deck_top_y, 0.0)
+		root.rotation.x = deg_to_rad(-8.0)
 		_ensure_board_socket(Vector3(0.0, deck_top_y - sole_sink, 0.0))
 		return
 	var feet_y := aabb.position.y
@@ -104,6 +106,9 @@ func _load_emily() -> void:
 	)
 	# Deck contact under Emily — handoff point for future BoneAttachment.
 	_ensure_board_socket(Vector3(0.0, deck_top_y - sole_sink, 0.0))
+	# Slight crouch + push-foot offset so silhouette reads as skating, not a standing block.
+	root.rotation.x = deg_to_rad(-8.0)
+	root.position.z += 0.04
 
 
 func _ensure_board_socket(local_pos: Vector3) -> void:

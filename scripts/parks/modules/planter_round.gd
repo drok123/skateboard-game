@@ -14,9 +14,14 @@ func _ready() -> void:
 	_rebuild()
 
 
-func _rebuild() -> void:
+func _clear_children() -> void:
 	for c in get_children():
-		c.queue_free()
+		remove_child(c)
+		c.free()
+
+
+func _rebuild() -> void:
+	_clear_children()
 	curb_segments = maxi(curb_segments, 6)
 	radius = maxf(radius, 0.6)
 	var groups := PackedStringArray(["deck"])
@@ -25,7 +30,7 @@ func _rebuild() -> void:
 	# Curb as ring of boxes (hollow — no solid disc blocking the pad).
 	var inner := maxf(radius - curb_thickness, 0.2)
 	var mid_r := (radius + inner) * 0.5
-	var seg_len := TAU * mid_r / float(curb_segments) * 1.05
+	var seg_len := TAU * mid_r / float(curb_segments) * 1.02
 	for i in range(curb_segments):
 		var a := TAU * float(i) / float(curb_segments)
 		PropKit.add_box(
@@ -45,9 +50,10 @@ func _rebuild() -> void:
 	soil_mesh.radial_segments = 16
 	soil.mesh = soil_mesh
 	soil.position = Vector3(0.0, curb_height - 0.04, 0.0)
+	soil.rotation = Vector3.ZERO
 	soil.material_override = PropKit.mat_for(PropKit.COLOR_SOIL)
 	add_child(soil)
-	# Palms — visual only so trunks don't snag the board
+	# Palms — visual only, always world-upright (no pitch/roll)
 	palm_count = maxi(palm_count, 0)
 	for i in range(palm_count):
 		var ang := TAU * float(i) / float(maxi(palm_count, 1))
@@ -62,6 +68,7 @@ func _rebuild() -> void:
 		trunk_mesh.radial_segments = 8
 		trunk.mesh = trunk_mesh
 		trunk.position = Vector3(px, curb_height + palm_height * 0.5, pz)
+		trunk.rotation = Vector3.ZERO
 		trunk.material_override = PropKit.mat_for(PropKit.COLOR_PALM)
 		add_child(trunk)
 		var frond := MeshInstance3D.new()
@@ -71,6 +78,8 @@ func _rebuild() -> void:
 		frond_mesh.height = 1.6
 		frond_mesh.radial_segments = 6
 		frond.mesh = frond_mesh
+		# Crown sits on trunk top, upright (inverted cone)
 		frond.position = Vector3(px, curb_height + palm_height + 0.2, pz)
+		frond.rotation = Vector3.ZERO
 		frond.material_override = PropKit.mat_for(PropKit.COLOR_PALM_FROND)
 		add_child(frond)

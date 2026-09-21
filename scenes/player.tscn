@@ -1,16 +1,17 @@
-[gd_scene load_steps=8 format=3 uid="uid://bskateplayer01"]
+[gd_scene load_steps=9 format=3 uid="uid://bskateplayer01"]
 
 [ext_resource type="Script" path="res://scripts/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/trick_system.gd" id="2_tricks"]
 [ext_resource type="Script" path="res://scripts/player_input.gd" id="3_input"]
 [ext_resource type="PackedScene" uid="uid://cemilyrig01" path="res://scenes/characters/emily.tscn" id="4_emily"]
+[ext_resource type="Script" path="res://scripts/board_visual.gd" id="5_board"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.35
 height = 1.4
 
 [sub_resource type="BoxMesh" id="BoxMesh_board"]
-size = Vector3(0.55, 0.08, 1.35)
+size = Vector3(0.52, 0.04, 1.28)
 
 [sub_resource type="StandardMaterial3D" id="Mat_board"]
 albedo_color = Color(0.15, 0.15, 0.18, 1)
@@ -36,6 +37,7 @@ shape = SubResource("CapsuleShape3D_1")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)
 mesh = SubResource("BoxMesh_board")
 material_override = SubResource("Mat_board")
+script = ExtResource("5_board")
 
 [node name="Rider" type="MeshInstance3D" parent="MeshPivot"]
 visible = false

@@ -14,9 +14,14 @@ func _ready() -> void:
 	_rebuild()
 
 
-func _rebuild() -> void:
+func _clear_children() -> void:
 	for c in get_children():
-		c.queue_free()
+		remove_child(c)
+		c.free()
+
+
+func _rebuild() -> void:
+	_clear_children()
 	step_count = maxi(step_count, 1)
 	var total_run := float(step_count) * tread
 	var total_rise := float(step_count) * riser

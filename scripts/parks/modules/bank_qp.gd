@@ -11,9 +11,14 @@ func _ready() -> void:
 	_rebuild()
 
 
-func _rebuild() -> void:
+func _clear_children() -> void:
 	for c in get_children():
-		c.queue_free()
+		remove_child(c)
+		c.free()
+
+
+func _rebuild() -> void:
+	_clear_children()
 	var pitch := deg_to_rad(-angle_deg)
 	# Run length along slope projected on ground.
 	var run := height / maxf(tan(deg_to_rad(angle_deg)), 0.01)

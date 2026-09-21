@@ -50,6 +50,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	_update_loco_clip()
 	if _combo_mult <= 1:
 		return
 	_combo_timer -= delta
@@ -57,6 +58,23 @@ func _process(delta: float) -> void:
 		_combo_mult = 1
 		_combo_score = 0
 		combo_changed.emit(_combo_mult, _combo_score)
+
+
+## Idle vs push clip while grounded — keeps toast/loco readable before skinned anims.
+func _update_loco_clip() -> void:
+	if _airborne_open or _active_trick != "":
+		return
+	var body := get_parent() as CharacterBody3D
+	if body == null or _anim == null:
+		return
+	if not body.is_on_floor():
+		return
+	var speed := Vector3(body.velocity.x, 0.0, body.velocity.z).length()
+	var want := "push" if speed > 1.5 else "idle"
+	if _anim.current_animation == want:
+		return
+	if _anim.has_animation(want):
+		_anim.play(want)
 
 
 func _bind_emily_pose() -> void:
