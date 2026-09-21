@@ -9,9 +9,13 @@ extends Camera3D
 
 var _target: Node3D
 var _look_target: Node3D
+var _base_fov := 75.0
+var _punch_offset := Vector3.ZERO
+var _punch_fov_add := 0.0
 
 
 func _ready() -> void:
+	_base_fov = fov
 	if target_path != NodePath(""):
 		_target = get_node_or_null(target_path) as Node3D
 	if _target == null:
@@ -23,13 +27,26 @@ func _ready() -> void:
 			_look_target = look
 
 
+## Light land / impact punch — offset + FOV only (beta playability).
+func apply_punch(strength: float, duration: float = 0.09) -> void:
+	strength = clampf(strength, 0.0, 1.0) * 0.7
+	if strength < 0.05:
+		return
+	_punch_offset = Vector3(0.0, -0.11 * strength, 0.045 * strength)
+	_punch_fov_add = 3.2 * strength
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(self, "_punch_offset", Vector3.ZERO, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "_punch_fov_add", 0.0, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
 
 func _physics_process(delta: float) -> void:
 	if _target == null:
 		return
-	var desired := _target.global_position + offset
+	var desired := _target.global_position + offset + _punch_offset
 	global_position = global_position.lerp(desired, 1.0 - exp(-follow_speed * delta))
 	var look_at_pos := (_look_target.global_position if _look_target else _target.global_position + look_offset)
 	var from := global_transform
 	var to := global_transform.looking_at(look_at_pos, Vector3.UP)
 	global_transform = from.interpolate_with(to, 1.0 - exp(-look_speed * delta))
+	fov = _base_fov + _punch_fov_add

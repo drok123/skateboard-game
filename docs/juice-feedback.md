@@ -79,4 +79,4 @@ Use `AudioStreamPlayer3D` at board for spatial; keep volumes conservative so HUD
 
 ## Live hooks (playtest borrow)
 
-Placeholder only (no deep VFX): `player.gd` emits `sfx_ollie` / `sfx_land(impact)` and plays silent `SfxOllie` / `SfxLand` AudioStreamPlayer3D nodes. Drop WAV/OGG onto those nodes when assets arrive.
+Beta: placeholder WAVs at `assets/audio/sfx/ollie_pop.wav` + `land_thud.wav` load onto `SfxOllie`/`SfxLand` at runtime. `sfx_ollie` / `sfx_land(impact)` still emit. Light `FollowCamera.apply_punch` on land. No particles yet.
