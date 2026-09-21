@@ -5,8 +5,8 @@ extends MeshInstance3D
 
 const DECK_SIZE := Vector3(0.52, 0.04, 1.28)
 const TRUCK_SIZE := Vector3(0.42, 0.05, 0.12)
-const WHEEL_RADIUS := 0.045
-const WHEEL_WIDTH := 0.055
+const WHEEL_RADIUS := 0.052
+const WHEEL_WIDTH := 0.058
 const WHEELBASE := 0.76
 
 
@@ -32,6 +32,7 @@ func _rebuild() -> void:
 		Vector3(0.0, -DECK_SIZE.y * 0.25, 0.0),
 		_mat_deck_underside()
 	)
+	_add_top_graphic()
 	var z_front := WHEELBASE * 0.5
 	var truck_y := -DECK_SIZE.y * 0.5 - TRUCK_SIZE.y * 0.5
 	var truck_mat := _mat_truck()
@@ -44,6 +45,39 @@ func _rebuild() -> void:
 	_add_wheel("WheelFR", Vector3(wheel_x, wheel_y, z_front), wheel_mat)
 	_add_wheel("WheelBL", Vector3(-wheel_x, wheel_y, -z_front), wheel_mat)
 	_add_wheel("WheelBR", Vector3(wheel_x, wheel_y, -z_front), wheel_mat)
+
+
+func _add_top_graphic() -> void:
+	## High-contrast procedural graphic so the deck reads at mid camera — not a brown slab.
+	## Sits on the top face; does not change deck_thickness() (Board mesh only).
+	var top_y := DECK_SIZE.y * 0.5
+	var grip := _mat_grip()
+	var stripe := _mat_stripe()
+	var mark := _mat_logo_mark()
+	_add_box(
+		"GripTape",
+		Vector3(DECK_SIZE.x * 0.90, 0.006, DECK_SIZE.z * 0.88),
+		Vector3(0.0, top_y + 0.004, 0.0),
+		grip
+	)
+	_add_box(
+		"CenterStripe",
+		Vector3(0.08, 0.007, DECK_SIZE.z * 0.72),
+		Vector3(0.0, top_y + 0.008, 0.0),
+		stripe
+	)
+	_add_box(
+		"LogoBlock",
+		Vector3(0.22, 0.008, 0.28),
+		Vector3(0.0, top_y + 0.010, DECK_SIZE.z * 0.28),
+		stripe
+	)
+	_add_box(
+		"LogoMark",
+		Vector3(0.12, 0.009, 0.16),
+		Vector3(0.0, top_y + 0.012, DECK_SIZE.z * 0.28),
+		mark
+	)
 
 
 func _add_box(node_name: String, size: Vector3, pos: Vector3, mat: Material) -> void:
@@ -110,3 +144,18 @@ func _mat_truck() -> StandardMaterial3D:
 func _mat_wheel() -> StandardMaterial3D:
 	## Dark charcoal rubber, matte. Albedo 0.12–0.18; darker than trucks.
 	return _named_mat("Mat_wheel", Color(0.14, 0.14, 0.15), 0.92)
+
+
+func _mat_grip() -> StandardMaterial3D:
+	## Dark matte grip tape — contrast vs wood rails at the deck edge.
+	return _named_mat("Mat_grip", Color(0.07, 0.07, 0.08), 0.96)
+
+
+func _mat_stripe() -> StandardMaterial3D:
+	## Warm cream stripe / logo plate — mid-distance pop, not neon.
+	return _named_mat("Mat_stripe", Color(0.88, 0.82, 0.70), 0.78)
+
+
+func _mat_logo_mark() -> StandardMaterial3D:
+	## Charcoal inner mark on the cream plate.
+	return _named_mat("Mat_logo_mark", Color(0.10, 0.10, 0.11), 0.90)
