@@ -94,14 +94,22 @@ func apply_movement(wish: Vector3, jump_pressed: bool, delta: float) -> void:
 			mesh.rotation.y = _facing
 
 		var turn_dir := wrapf(wish_angle - _facing, -PI, PI)
-		var lean_target := clampf(-turn_dir * 2.0, -CARVE_LEAN_MAX, CARVE_LEAN_MAX)
-		if not on_floor:
-			lean_target *= 0.35
-		_board_lean = lerpf(_board_lean, lean_target, 12.0 * delta)
+		# Lean only while carving/accelerating — upright at rest (P0 idle lean).
+		var lean_target := 0.0
+		var turning := absf(turn_dir) > 0.12
+		var moving := speed > 2.0 or wish.length_squared() > 0.25
+		if turning and moving:
+			lean_target = clampf(-turn_dir * 1.6, -CARVE_LEAN_MAX, CARVE_LEAN_MAX)
+			lean_target *= clampf(speed / 5.0, 0.25, 1.0)
+			if not on_floor:
+				lean_target *= 0.35
+		_board_lean = lerpf(_board_lean, lean_target, 14.0 * delta)
 	else:
 		var fric := FRICTION if speed > 2.0 else BRAKE_FRICTION
 		horizontal = horizontal.move_toward(Vector3.ZERO, fric * control * delta)
-		_board_lean = lerpf(_board_lean, 0.0, 8.0 * delta)
+		_board_lean = lerpf(_board_lean, 0.0, 16.0 * delta)
+		if absf(_board_lean) < 0.02:
+			_board_lean = 0.0
 
 	velocity.x = horizontal.x
 	velocity.z = horizontal.z
@@ -241,7 +249,12 @@ func _update_board_visuals(delta: float, on_surface: bool) -> void:
 		rider.rotation.x = board.rotation.x * 0.45
 		rider.rotation.z = board.rotation.z * 0.7
 	if mesh:
-		mesh.rotation.z = lerpf(mesh.rotation.z, _board_lean * 0.5, 10.0 * delta)
+		# Never pitch MeshPivot (idle ~45° back lean bug). Roll only while carving.
+		mesh.rotation.x = 0.0
+		var body_roll := _board_lean * 0.45 if absf(_board_lean) > 0.03 else 0.0
+		mesh.rotation.z = lerpf(mesh.rotation.z, body_roll, 14.0 * delta)
+		if absf(mesh.rotation.z) < 0.01 and body_roll == 0.0:
+			mesh.rotation.z = 0.0
 
 
 func _recover_secondary(delta: float) -> void:

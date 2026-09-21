@@ -17,11 +17,13 @@ const MESH_NAME := "EmilyMesh"
 @export var sole_sink := 0.02
 @export var yaw_offset := PI
 @export var model_scale := 0.92
-## High-contrast athletic block vs pale Venice concrete (#C8C4BC).
-## Single mesh / no UVs yet — dark matte stand-in until Character Rigging splits skin/hair/clothing.
-@export var body_albedo := Color(0.22, 0.26, 0.32, 1.0)
-@export var accent_albedo := Color(0.55, 0.35, 0.28, 1.0)
-@export var body_roughness := 0.9
+## Material policy (P0): prefer imported GLB materials; else style-bible sun-kissed skin.
+## Dark athletic block only when force_silhouette_block is true (debug / extreme washout).
+@export var body_albedo := Color(0.82, 0.64, 0.52, 1.0)  ## sun-kissed skin stand-in
+@export var hair_albedo := Color(0.72, 0.62, 0.42, 1.0)  ## honey/ash blonde (future slots)
+@export var clothing_albedo := Color(0.14, 0.15, 0.17, 1.0)  ## dark athletic (future slots)
+@export var body_roughness := 0.72
+@export var force_silhouette_block := false
 ## Future skinned GLB path (unused until Art ships weights). Keep stance for playable.
 @export_file("*.glb") var skinned_glb_path := ""
 
@@ -95,7 +97,7 @@ func _load_emily() -> void:
 	var aabb := _mesh_aabb(root)
 	if aabb.size == Vector3.ZERO:
 		root.position = Vector3(0.0, deck_top_y, 0.0)
-		root.rotation.x = deg_to_rad(-8.0)
+		root.rotation.x = 0.0
 		_ensure_board_socket(Vector3(0.0, deck_top_y - sole_sink, 0.0))
 		return
 	var feet_y := aabb.position.y
@@ -106,9 +108,9 @@ func _load_emily() -> void:
 	)
 	# Deck contact under Emily — handoff point for future BoneAttachment.
 	_ensure_board_socket(Vector3(0.0, deck_top_y - sole_sink, 0.0))
-	# Slight crouch + push-foot offset so silhouette reads as skating, not a standing block.
-	root.rotation.x = deg_to_rad(-8.0)
-	root.position.z += 0.04
+	# Upright at rest (P0: no back lean). Tiny forward offset for stance silhouette only.
+	root.rotation.x = deg_to_rad(-2.0)  # slight forward crouch, never back
+	root.position.z += 0.02
 
 
 func _ensure_board_socket(local_pos: Vector3) -> void:
@@ -130,16 +132,51 @@ func _find_skeleton(node: Node) -> Skeleton3D:
 
 
 func _apply_prototype_material(node: Node) -> void:
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = body_albedo
-	mat.roughness = body_roughness
-	mat.metallic = 0.0
-	mat.specular = 0.25
+	## Prefer real GLB materials. Only invent a style-bible stand-in when the mesh
+	## has no textured / authored albedo (current stance GLB is untextured).
 	for child in node.find_children("*", "MeshInstance3D", true, false):
 		var mi := child as MeshInstance3D
-		if mi:
-			mi.material_override = mat
-			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		if mi == null:
+			continue
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		mi.material_override = null
+		if force_silhouette_block:
+			mi.material_override = _make_mat(clothing_albedo, 0.9, 0.2)
+			continue
+		if _mesh_has_authored_look(mi):
+			continue
+		# Untextured single-material sculpt → sun-kissed skin (not blue mannequin).
+		mi.material_override = _make_mat(body_albedo, body_roughness, 0.35)
+
+
+func _make_mat(albedo: Color, roughness: float, specular: float) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = albedo
+	mat.roughness = roughness
+	mat.metallic = 0.0
+	mat.specular = specular
+	return mat
+
+
+func _mesh_has_authored_look(mi: MeshInstance3D) -> bool:
+	if mi.mesh == null:
+		return false
+	# Any surface material with a texture or non-default named look counts as authored.
+	for surf in range(mi.mesh.get_surface_count()):
+		var mat := mi.get_active_material(surf)
+		if mat == null:
+			continue
+		if mat is BaseMaterial3D:
+			var bm := mat as BaseMaterial3D
+			if bm.albedo_texture != null:
+				return true
+			# Explicit non-white albedo from the GLB counts (future textured exports).
+			var c := bm.albedo_color
+			var near_white := c.r > 0.95 and c.g > 0.95 and c.b > 0.95
+			var near_gray := absf(c.r - c.g) < 0.02 and absf(c.g - c.b) < 0.02 and c.r > 0.45 and c.r < 0.75
+			if not near_white and not near_gray:
+				return true
+	return false
 
 
 func _import_glb(path: String) -> Node3D:
