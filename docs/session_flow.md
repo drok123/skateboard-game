@@ -20,10 +20,10 @@ Fail is cheap. Never soft-lock.
 
 | ID | Name | Teach | Success (v1) | Zone / props |
 |----|------|-------|--------------|--------------|
-| G1 | Warm-up street | push, ollie, ledge | Cross plaza + grind or ollie `flatbar` + touch stairs A hubba | Street plaza |
-| G2 | Bowl pump | pump / carve | Enter snake/flow, exit to street bank with speed | Flow bowls W |
-| G3 | Hero loop | transfer + full carve | Bank → snake → clover, one full carve, lip near SE palms | Clover SE |
-| G4 | Stair gap | speed + air | Clear stairs B (no early land on steps), land flat | Stairs B + QP approach |
+| G1 | Warm-up | push / grind | Slide or near plaza `Flatbar` / `StairsA` hubba / `Ledge` (not planter/coping) | Street plaza |
+| G2 | Bowl pump | pump / carve | Dwell snake ≥1s, exit to street at ≥3.5 speed | Flow bowls W |
+| G3 | Hero loop | transfer + carve | Visited snake, dwell clover ≥1.8s | Clover SE |
+| G4 | Stair gap | speed + air | Arm in `zone_stairs_b` at ≥4.5, land outside with speed | Stairs B |
 
 Order: G1 → G2 → G3 → G4. Skipping allowed; HUD can show “free skate” after any clear.
 
@@ -58,3 +58,9 @@ Order: G1 → G2 → G3 → G4. Skipping allowed; HUD can show “free skate” 
 
 - Skip / free skate: goals never block movement; clearing advances the HUD line.
 - Grind contact prefers slide collisions on `grindable`; street proximity fallback while Squad 1 grind feel catches up.
+
+## Beta pass
+
+- HUD copy shortened (title — one action).
+- G1 ignores planter/coping; plaza grind props only.
+- G2/G3/G4 thresholds eased slightly for reliable clears without sticky clover.

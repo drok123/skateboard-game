@@ -52,23 +52,32 @@ func _build_sand_apron() -> void:
 func _build_deck_plates() -> void:
 	# Concrete deck as plates that leave holes for snake (CW) and clover (SE).
 	# Full extents: x -24..24, z -20..20. Deck thickness 0.4, top at Y=0.
+	# Lip rings around bowls are added in _place_bowl_cluster / clover.
 	var plates: Array = [
 		# North street plaza
 		[Vector3(48.0, 0.4, 14.0), Vector3(0.0, -0.2, 13.0)],
 		# South strip (south of clover hole)
 		[Vector3(48.0, 0.4, 5.0), Vector3(0.0, -0.2, -17.5)],
-		# West entrance / west of snake
+		# West entrance / west of snake — covers spawn (-18, ~0, 4)
 		[Vector3(11.0, 0.4, 22.0), Vector3(-18.5, -0.2, -4.0)],
 		# East strip (east of clover)
 		[Vector3(8.0, 0.4, 22.0), Vector3(20.0, -0.2, -4.0)],
-		# Bridge between snake and clover (narrow N-S)
-		[Vector3(3.5, 0.4, 12.0), Vector3(2.25, -0.2, -1.0)],
+		# Bridge between snake and clover (kept east of snake B lip ~x=2)
+		[Vector3(3.0, 0.4, 12.0), Vector3(3.0, -0.2, -1.0)],
 		# North of clover / east of snake south lip
 		[Vector3(12.0, 0.4, 10.0), Vector3(10.0, -0.2, 0.0)],
 		# South-west of snake (west of clover hole)
 		[Vector3(15.0, 0.4, 8.0), Vector3(-5.5, -0.2, -11.0)],
-		# Far NE corner fill (already mostly north+east; small connector)
+		# Far NE corner fill
 		[Vector3(10.0, 0.4, 8.0), Vector3(14.0, -0.2, 6.0)],
+		# Plaza→snake apron (closes fall-through north of snake lips)
+		[Vector3(12.0, 0.4, 3.0), Vector3(-5.0, -0.2, 5.2)],
+		# Snake→clover deck connector (teach-line flat)
+		[Vector3(7.0, 0.4, 4.5), Vector3(2.0, -0.2, -6.0)],
+		# Clover east apron toward east wall plate
+		[Vector3(3.5, 0.4, 10.0), Vector3(15.5, -0.2, -10.0)],
+		# Clover south fill (north of south strip)
+		[Vector3(8.0, 0.4, 3.0), Vector3(6.0, -0.2, -15.0)],
 	]
 	for p in plates:
 		PropKit.add_box(
@@ -190,6 +199,26 @@ func _build_street_plaza() -> void:
 	bank.rotation.y = PI * 0.5  # slope along local +Z → world -X (into plaza)
 	add_child(bank)
 
+	# Flow: plaza → snake (south into bowls) — closes dead flat teach gap
+	var into_snake = BankQpScene.instantiate()
+	into_snake.name = "PlazaToSnakeBank"
+	into_snake.width = 5.0
+	into_snake.height = 1.0
+	into_snake.angle_deg = 26.0
+	into_snake.position = Vector3(-6.0, 0.0, 6.2)
+	into_snake.rotation.y = PI  # slope along local +Z → world -Z (into snake)
+	add_child(into_snake)
+
+	# Short N–S guide ledge marking the street→snake line
+	var guide = LedgeScene.instantiate()
+	guide.name = "FlowGuideLedge"
+	guide.length = 3.5
+	guide.depth = 0.35
+	guide.height = 0.4
+	guide.position = Vector3(1.0, 0.0, 7.0)
+	guide.rotation.y = PI * 0.5  # along +Z
+	add_child(guide)
+
 
 func _build_snake_bowls() -> void:
 	# 2–3 linked shallow kidneys, center-west. Depth ~-1.6..-2.2.
@@ -197,22 +226,12 @@ func _build_snake_bowls() -> void:
 	snake.name = "SnakeBowls"
 	add_child(snake)
 
+	var a_c := Vector3(-8.0, 0.0, -1.0)
+	var b_c := Vector3(-2.0, 0.0, 1.5)
 	# Bowl A (west, shallower)
-	_place_bowl_cluster(
-		snake,
-		Vector3(-8.0, 0.0, -1.0),
-		4.5,
-		1.8,
-		["SnakeA"]
-	)
+	_place_bowl_cluster(snake, a_c, 4.5, 1.8, [[b_c, 4.0]])
 	# Bowl B (east of A, slightly deeper) — hip transfer toward clover
-	_place_bowl_cluster(
-		snake,
-		Vector3(-2.0, 0.0, 1.5),
-		4.0,
-		2.1,
-		["SnakeB"]
-	)
+	_place_bowl_cluster(snake, b_c, 4.0, 2.1, [[a_c, 4.5]])
 	# Small connector hip / saddle between A and B
 	PropKit.add_box(
 		snake,
@@ -224,15 +243,21 @@ func _build_snake_bowls() -> void:
 	# Transition bank toward clover (SE)
 	var feed = BankQpScene.instantiate()
 	feed.name = "SnakeToCloverBank"
-	feed.width = 3.5
+	feed.width = 4.0
 	feed.height = 1.4
 	feed.angle_deg = 28.0
-	feed.position = Vector3(0.5, -0.2, -3.0)
+	feed.position = Vector3(1.0, -0.15, -3.5)
 	feed.rotation.y = -PI * 0.35
 	snake.add_child(feed)
 
 
-func _place_bowl_cluster(parent: Node3D, center: Vector3, radius: float, depth: float, _tags: Array) -> void:
+func _place_bowl_cluster(
+	parent: Node3D,
+	center: Vector3,
+	radius: float,
+	depth: float,
+	sibling_holes: Array = []
+) -> void:
 	# Four 90° bowl_segment arcs forming an oval-ish pool + coping ring.
 	var arcs: Array = [
 		[0.0, 0.0],
@@ -240,7 +265,6 @@ func _place_bowl_cluster(parent: Node3D, center: Vector3, radius: float, depth: 
 		[PI, 0.0],
 		[PI * 1.5, 0.0],
 	]
-	# Slight oval: stretch X
 	for i in range(arcs.size()):
 		var yaw: float = arcs[i][0]
 		var seg = BowlSegmentScene.instantiate()
@@ -251,16 +275,29 @@ func _place_bowl_cluster(parent: Node3D, center: Vector3, radius: float, depth: 
 		seg.position = center
 		seg.rotation.y = yaw
 		parent.add_child(seg)
-	# Full floor disc (segments only place a small pad)
+	# Floor disc nearly to wall inner face (walls ~radius, thickness 0.4).
+	# Was radius*0.75 — left ~0.8–1.0 m sand ring at bottom.
 	PropKit.add_cylinder(
 		parent,
-		radius * 0.75,
-		0.25,
-		center + Vector3(0.0, -depth + 0.12, 0.0),
+		radius * 0.92,
+		0.35,
+		center + Vector3(0.0, -depth + 0.15, 0.0),
 		PropKit.COLOR_CONCRETE,
 		PackedStringArray(["bowl", "deck"]),
 		20
 	)
+	# Thicker bottom pad under seams
+	PropKit.add_cylinder(
+		parent,
+		radius * 0.85,
+		0.5,
+		center + Vector3(0.0, -depth - 0.1, 0.0),
+		PropKit.COLOR_CONCRETE,
+		PackedStringArray(["bowl", "deck"]),
+		16
+	)
+	# Deck lip ring — closes plate→lip fall-through (skip segs inside sibling bowls)
+	_add_deck_lip_ring(parent, center, radius, sibling_holes)
 	# Coping ring (8 straight segments)
 	var cope_n := 8
 	for i in range(cope_n):
@@ -272,6 +309,39 @@ func _place_bowl_cluster(parent: Node3D, center: Vector3, radius: float, depth: 
 		parent.add_child(c)
 
 
+func _add_deck_lip_ring(
+	parent: Node3D,
+	center: Vector3,
+	radius: float,
+	sibling_holes: Array = [],
+	ring_width: float = 1.5,
+	segments: int = 16
+) -> void:
+	var mid_r := radius + ring_width * 0.5
+	var chord := (TAU * mid_r) / float(segments) * 1.12
+	for i in range(segments):
+		var a := TAU * float(i) / float(segments)
+		var pos := center + Vector3(sin(a) * mid_r, -0.2, -cos(a) * mid_r)
+		var skip := false
+		for h in sibling_holes:
+			var hc: Vector3 = h[0]
+			var hr: float = h[1]
+			if Vector2(pos.x - hc.x, pos.z - hc.z).length() < hr:
+				skip = true
+				break
+		if skip:
+			continue
+		# yaw = PI - a so local +Z aligns with outward (sin(a), -cos(a))
+		PropKit.add_box(
+			parent,
+			Vector3(chord, 0.4, ring_width),
+			pos,
+			PropKit.COLOR_CONCRETE,
+			PackedStringArray(["deck"]),
+			Vector3(0.0, PI - a, 0.0)
+		)
+
+
 func _build_clover_bowl() -> void:
 	# Hero peanut / clover SE — deeper ~-3.0, full coping.
 	var clover := Node3D.new()
@@ -280,9 +350,11 @@ func _build_clover_bowl() -> void:
 
 	var center := Vector3(10.0, 0.0, -10.0)
 	var depth := 3.0
-	# Two overlapping lobes for peanut shape
-	_place_bowl_cluster(clover, center + Vector3(-2.0, 0.0, 0.5), 5.0, depth, ["CloverW"])
-	_place_bowl_cluster(clover, center + Vector3(2.5, 0.0, -0.5), 4.5, depth, ["CloverE"])
+	var w_c := center + Vector3(-2.0, 0.0, 0.5)
+	var e_c := center + Vector3(2.5, 0.0, -0.5)
+	# Two overlapping lobes for peanut shape (lip rings skip sibling interiors)
+	_place_bowl_cluster(clover, w_c, 5.0, depth, [[e_c, 4.5]])
+	_place_bowl_cluster(clover, e_c, 4.5, depth, [[w_c, 5.0]])
 	# Shared deep floor bridge
 	PropKit.add_box(
 		clover,

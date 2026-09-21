@@ -1,8 +1,6 @@
 class_name TrickClips
-## Named AnimationPlayer clips for flatground v1.
-## Names match the flatground reference video's on-screen labels (regular stance first).
+## Named AnimationPlayer clips for flatground v1 (beta toast names).
 
-## Loopable locomotion — ship these stubs first.
 const LOCOMOTION := [
 	"idle",
 	"push",
@@ -10,7 +8,7 @@ const LOCOMOTION := [
 	"land",
 ]
 
-## Priority trick stubs for the prototype (regular stance).
+## Regular-stance v1 — lights HUD toast via trick_started.
 const V1_TRICKS := [
 	"ollie",
 	"kickflip",
@@ -18,9 +16,9 @@ const V1_TRICKS := [
 	"frontside_180",
 	"backside_180",
 	"backside_shuv",
+	"tre",
 ]
 
-## Placeholder lengths (seconds) until real keyframes land.
 const STUB_LENGTHS := {
 	"idle": 1.0,
 	"push": 0.6,
@@ -32,6 +30,17 @@ const STUB_LENGTHS := {
 	"frontside_180": 0.5,
 	"backside_180": 0.5,
 	"backside_shuv": 0.5,
+	"tre": 0.65,
+}
+
+## Air trick hotkeys (physical) — beta only until Controller owns a trick map.
+const AIR_TRICK_KEYS := {
+	KEY_J: "kickflip",
+	KEY_K: "heelflip",
+	KEY_U: "frontside_180",
+	KEY_I: "backside_180",
+	KEY_O: "backside_shuv",
+	KEY_P: "tre",
 }
 
 static func all_stub_names() -> PackedStringArray:
@@ -41,3 +50,16 @@ static func all_stub_names() -> PackedStringArray:
 	for n in V1_TRICKS:
 		out.append(n)
 	return out
+
+
+static func pretty_name(trick_name: String) -> String:
+	if trick_name == "tre":
+		return "Tre Flip"
+	if trick_name == "backside_shuv":
+		return "Backside Shuv"
+	var parts := trick_name.split("_")
+	for i in parts.size():
+		if parts[i].is_valid_int():
+			continue
+		parts[i] = parts[i].capitalize()
+	return " ".join(parts)

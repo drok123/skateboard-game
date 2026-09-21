@@ -2,8 +2,8 @@ extends Node3D
 ## Straight coping segment for bowl lips. Grindable metal edge on concrete lip.
 
 @export var length: float = 2.0
-@export var coping_size: float = 0.14
-@export var lip_width: float = 0.35
+@export var coping_size: float = 0.16
+@export var lip_width: float = 0.4
 @export var lip_thickness: float = 0.12
 
 

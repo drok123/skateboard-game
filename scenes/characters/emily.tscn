@@ -1,0 +1,11 @@
+[gd_scene load_steps=2 format=3 uid="uid://cemilyrig01"]
+
+[ext_resource type="Script" path="res://scripts/emily_visual.gd" id="1_emily"]
+
+[node name="Emily" type="Node3D"]
+script = ExtResource("1_emily")
+editor_description = "Character Rigging source of truth. Runtime: EmilyMesh (stance GLB), BoardSocket (deck contact). Future: Skeleton3D under mesh; soft motion only after skin+materials — see docs/character-rig.md + docs/soft-motion-rigging.md."
+
+[node name="BoardSocket" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.14, 0)
+editor_description = "Feet/deck contact marker. Future BoneAttachment handoff."

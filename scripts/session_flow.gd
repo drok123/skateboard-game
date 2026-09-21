@@ -7,30 +7,37 @@ signal session_complete()
 
 const GOAL_ORDER := ["G1", "G2", "G3", "G4"]
 
+# Crisp HUD copy — short title + one action.
 const GOALS := {
 	"G1": {
-		"title": "Warm-up street",
-		"hint": "Push the plaza — grind or ollie the flatbar / hubba",
+		"title": "Warm-up",
+		"hint": "Grind the flatbar or stairs hubba",
 	},
 	"G2": {
 		"title": "Bowl pump",
-		"hint": "Drop the snake bowls, carve, exit back to street with speed",
+		"hint": "Carve the snake, exit to street with speed",
 	},
 	"G3": {
 		"title": "Hero loop",
-		"hint": "Snake into the clover — carve a full loop",
+		"hint": "Transfer into the clover and carve a loop",
 	},
 	"G4": {
 		"title": "Stair gap",
-		"hint": "Carry speed into stairs B and clear the set",
+		"hint": "Hit stairs B with speed and land past them",
 	},
 }
 
-const SNAKE_DWELL_SEC := 1.2
-const CLOVER_DWELL_SEC := 2.5
-const EXIT_SPEED_MIN := 4.0
-const GAP_SPEED_MIN := 5.5
-const GRIND_PROXIMITY := 1.8
+# Tuned for beta reliability (soft clears, not sticky).
+const SNAKE_DWELL_SEC := 1.0
+const CLOVER_DWELL_SEC := 1.8
+const EXIT_SPEED_MIN := 3.5
+const GAP_SPEED_MIN := 4.5
+const GAP_LAND_SPEED_MIN := 1.5
+const GAP_ARM_SEC := 2.5
+const STREET_GRIND_PROXIMITY := 2.2
+
+## Plaza grind props only — ignore west planter / bowl coping for G1.
+const STREET_GRIND_NAMES := ["Flatbar", "StairsA", "Ledge", "LongLedge"]
 
 var _player: CharacterBody3D
 var _active_index: int = 0
@@ -48,6 +55,7 @@ var _g2_pumped := false
 
 var _gap_armed := false
 var _gap_arm_timer := 0.0
+var _gap_was_airborne := false
 
 var _zones_wired := false
 
@@ -116,7 +124,6 @@ func _wire_zones() -> void:
 			area.body_entered.connect(_on_zone_body_entered.bind(zone_name))
 		if not area.body_exited.is_connected(_on_zone_body_exited.bind(zone_name)):
 			area.body_exited.connect(_on_zone_body_exited.bind(zone_name))
-		# Seed overlap if player already inside.
 		if _player and area.overlaps_body(_player):
 			_set_zone(zone_name, true)
 		found += 1
@@ -167,6 +174,7 @@ func _tick_gap_arm(delta: float) -> void:
 		_gap_arm_timer -= delta
 		if _gap_arm_timer <= 0.0:
 			_gap_armed = false
+			_gap_was_airborne = false
 
 
 func _horizontal_speed() -> float:
@@ -175,21 +183,37 @@ func _horizontal_speed() -> float:
 	return Vector3(_player.velocity.x, 0.0, _player.velocity.z).length()
 
 
-func _touching_grindable() -> bool:
-	if _player == null:
+func _is_street_grind_prop(node: Node) -> bool:
+	if node == null:
 		return false
-	# Prefer slide contacts (fat grind volumes from Props).
+	# Bowl coping is not the warm-up plaza line.
+	if node.is_in_group("coping"):
+		return false
+	var n := node
+	while n:
+		var name_str := String(n.name)
+		for want in STREET_GRIND_NAMES:
+			if name_str == want or name_str.begins_with(want):
+				return true
+		n = n.get_parent()
+	return false
+
+
+func _touching_street_grindable() -> bool:
+	if _player == null or not _in_street:
+		return false
+	# Prefer fat slide contacts from Props.
 	for i in _player.get_slide_collision_count():
 		var col := _player.get_slide_collision(i)
-		var collider := col.get_collider()
+		var collider = col.get_collider()
 		if collider is Node and (collider as Node).is_in_group("grindable"):
-			return true
-	# Proximity fallback while grind physics is still light.
+			if _is_street_grind_prop(collider as Node):
+				return true
+	# Proximity only to plaza props (not west planter near spawn).
 	for node in get_tree().get_nodes_in_group("grindable"):
-		if node is Node3D:
+		if node is Node3D and _is_street_grind_prop(node):
 			var n3 := node as Node3D
-			var d := _player.global_position.distance_to(n3.global_position)
-			if d <= GRIND_PROXIMITY and _in_street:
+			if _player.global_position.distance_to(n3.global_position) <= STREET_GRIND_PROXIMITY:
 				return true
 	return false
 
@@ -200,10 +224,10 @@ func _evaluate_active_goal() -> void:
 		return
 	match id:
 		"G1":
-			if _in_street and _touching_grindable():
+			if _touching_street_grindable():
 				_advance("cleared")
 		"G2":
-			if _g2_pumped and _in_street and _horizontal_speed() >= EXIT_SPEED_MIN:
+			if _g2_pumped and _in_street and not _in_snake and _horizontal_speed() >= EXIT_SPEED_MIN:
 				_advance("cleared")
 		"G3":
 			if _visited_snake and _in_clover and _clover_time >= CLOVER_DWELL_SEC:
@@ -214,12 +238,20 @@ func _evaluate_active_goal() -> void:
 
 func _try_stair_gap() -> void:
 	var speed := _horizontal_speed()
+	var airborne := _player != null and not _player.is_on_floor()
+	# Arm on a committed pass through stairs B (speed, preferably air).
 	if _in_stairs_b and speed >= GAP_SPEED_MIN:
 		_gap_armed = true
-		_gap_arm_timer = 2.0
-	if _gap_armed and not _in_stairs_b and _player.is_on_floor() and speed >= 2.0:
-		_gap_armed = false
-		_advance("cleared")
+		_gap_arm_timer = GAP_ARM_SEC
+		if airborne:
+			_gap_was_airborne = true
+	# Clear: leave the volume and land flat with leftover speed.
+	if _gap_armed and not _in_stairs_b and _player.is_on_floor() and speed >= GAP_LAND_SPEED_MIN:
+		# Prefer a real gap (was airborne) but allow fast roll-clear for soft beta.
+		if _gap_was_airborne or speed >= GAP_SPEED_MIN:
+			_gap_armed = false
+			_gap_was_airborne = false
+			_advance("cleared")
 
 
 func _advance(_reason: String) -> void:
@@ -234,7 +266,7 @@ func _advance(_reason: String) -> void:
 	if _active_index >= GOAL_ORDER.size():
 		_complete = true
 		session_complete.emit()
-		get_tree().call_group("hud", "set_objective", "Free skate — Venice lines unlocked")
+		get_tree().call_group("hud", "set_objective", "Free skate — lines unlocked")
 		get_tree().call_group("hud", "show_toast", "Session clear — free skate")
 		return
 

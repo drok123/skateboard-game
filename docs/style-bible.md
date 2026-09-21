@@ -8,7 +8,9 @@ Keep the prototype playable. Art follows feel; do not block Squad 1/2 on polish.
 
 References (box paths):
 - Character look: `references/character/emily_venz_look.jpg`
-- Mesh: `references/character/emily_skater.glb` (single static mesh today — no skin, no clips)
+- Playable stance: `assets/characters/emily_skater_stance.glb` (beta visual; single mesh)
+- T-pose / rig source: `assets/characters/emily_skater.glb` (do not show as playable)
+- Soft-motion handoff: `docs/soft-motion-rigging.md`
 - Park mood: `references/park/venice_beach_skatepark_aerial.jpg`
 
 ## World palette
@@ -44,6 +46,12 @@ Lighting: one strong key (golden-hour lean OK), soft sky fill, mild AO in bowls 
 - Hair: opaque cards or thick strands with soft specular; prioritize silhouette over strand count.
 - Clothing: matte fabrics; small roughness variation beats noisy normals at this scale.
 - Keep texel density modest; prototype first, beauty second.
+
+## Beta silhouette (current)
+
+- Playable Emily uses a **dark matte athletic block** (`emily_visual.gd`) so she pops on `#C8C4BC` concrete.
+- Single material until Character Rigging splits skin / hair / clothing — then match Emily identity colors from the look ref.
+- Board stays dark wood (Board & Surfacing); do not lighten the rider into concrete-gray.
 
 ## Soft secondary motion (post-rig)
 
