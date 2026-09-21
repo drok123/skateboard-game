@@ -39,8 +39,8 @@ Camera-friendly top-down (**Z+ = north**). Remap vs Derron aerials: **bowls NORT
     │                      ○ palm cluster (E)  │
     │                                          │
     │  W STREET PLAZA (south)              E   │
-    │  [stairs A] [hubba] [ledge] [flatbar]    │
-    │  [stairs B + rail]          ○ ○ palms SE │
+    │  [A] [B] [ManualPad] [ledge] [flatbar]   │
+    │  [bank2 SW]  [Ledge2 SE]    ○ ○ palms SE │
     │                                          │
     └──────────────────────────────────────────┘
                     Z−  (south — street / entrance)
@@ -52,7 +52,7 @@ Camera-friendly top-down (**Z+ = north**). Remap vs Derron aerials: **bowls NORT
 ### A — Perimeter & sand apron
 - Low concrete wall ring matching kidney/organic outline (v1: rounded rect or 8–12 segment polygon is fine).
 - Thin metal rail on top (thin boxes or cylinders) — **not grindable** in v1 (visual only) so players don’t leave the park on a rail grind.
-- Outside wall: flat sand-colored ground plane extending ~8 m (kill volume or soft reset later).
+- Outside wall: wide sand apron (~12 m beyond walls) + thin OOB berm just outside wall — do not bury the deck (kill volume / soft reset later).
 
 ### B — Street plaza (south)
 Teach: push, carve, ollie onto ledges, stair gaps, flatbar grind approaches.
@@ -65,6 +65,23 @@ Teach: push, carve, ollie onto ledges, stair gaps, flatbar grind approaches.
 | Long ledge / planter | 6–8 × 0.45 × 0.55 | grindable top edge |
 | Flatbar | 5 × 0.12 × 0.12 @ 0.45 high | grindable |
 | Small bank / QP | 4 wide, ~1.2 high, ~30° | feeds back to flat |
+| ManualPad *(extra)* | 3.5 × 2.2 × 0.28 | mid plaza, grind lip |
+| Ledge2 *(extra)* | 5.0 × 0.4 × 0.5 | SE street line |
+| StreetBank2 *(extra)* | 3.5 wide, ~1.0 high | far SW turnaround |
+
+**Aerial density (beta):** Cap new plaza extras at **2 ledges/pads + 1 bank**. Prefer readable gaps over filling every flat. SessionFlow names stay: `StairsA`, `StairsB`, `LongLedge`, `Flatbar`.
+
+**Sand apron:** Wide beach plane (~12 m beyond walls) + thin OOB sand berm just outside perimeter — do not bury the deck lip.
+
+**North bowls:** Still `_place_simple_bowl` only (no `bowl_segment` shards, no coping spam). Third smaller snake pocket NW; clover radius slightly larger; transfer banks `PlazaToSnakeBank` / `SnakeToCloverBank` / `CloverHip` widened for silhouette.
+
+### Competitor readability (inspiration only — no level copy)
+
+Layout taste for plaza lines (see `docs/reference/competitor-feel-look.md`):
+- **skate.** plaza/city flow: https://www.youtube.com/watch?v=-Mi9EKoBCSg (Season 1) — clear plaza lines readable at distance
+- **Skater XL** park lines: https://www.youtube.com/watch?v=HK5sBzPsMGc — simple ledge/rail teaching lines, readable parks
+
+Beta leans **XL-simple teaching lines + Venice aerial geometry** — avoid maximalist city clutter. Aerials in `docs/reference/venice/` stay primary for Venice shapes.
 
 ### C — Flow / snake bowls (north)
 Teach: pump, carve walls, hip transfers, keep speed without ollie.
@@ -102,6 +119,7 @@ res://scenes/parks/modules/                   # Props owns these later
   stairs_set.tscn
   ledge.tscn
   flatbar.tscn
+  manual_pad.tscn
   planter_round.tscn
   perimeter_wall.tscn
   bank_qp.tscn

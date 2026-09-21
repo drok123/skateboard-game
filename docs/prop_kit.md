@@ -10,6 +10,7 @@ Shared helper: `PropKit` (`prop_kit.gd`)
 | `stairs_set` | 3 steps × 3 m wide, optional hubba + handrail | `deck`, hubba lip `grindable` |
 | `ledge` | 7 × 0.45 × 0.55; `is_hubba` for taller | `deck` + top `grindable` |
 | `flatbar` | 5 m @ 0.45 high | `grindable` |
+| `manual_pad` | 3.5×2.2×0.28 low pad; optional lip | `deck` + lip `grindable` |
 | `bank_qp` | 4 m wide, 1.2 m, 30° | `deck` |
 
 ## Bowl / perimeter

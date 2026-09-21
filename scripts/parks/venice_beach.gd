@@ -1,10 +1,12 @@
 extends Node3D
 ## Venice Beach skatepark blockout: street plaza SOUTH (−Z), bowl cluster NORTH (+Z).
 ## Orientation: Z+ = north. Simple bowls only (cylinder floor + 8 wall slabs + 4 coping).
+## Aerial-fidelity pass: wider sand berm, denser south plaza, third snake pocket.
 
 const StairsSetScene := preload("res://scenes/parks/modules/stairs_set.tscn")
 const LedgeScene := preload("res://scenes/parks/modules/ledge.tscn")
 const FlatbarScene := preload("res://scenes/parks/modules/flatbar.tscn")
+const ManualPadScene := preload("res://scenes/parks/modules/manual_pad.tscn")
 const BankQpScene := preload("res://scenes/parks/modules/bank_qp.tscn")
 const CopingEdgeScene := preload("res://scenes/parks/modules/coping_edge.tscn")
 const PerimeterWallScene := preload("res://scenes/parks/modules/perimeter_wall.tscn")
@@ -41,14 +43,46 @@ func _build() -> void:
 
 
 func _build_sand_apron() -> void:
-	# Outside pad + visible under bowl openings (~8 m beyond walls).
+	# Wide beach surround (~12 m beyond walls) under/around perimeter — still OOB.
+	# Slightly lower than deck so concrete lip stays readable (don't bury the deck).
 	PropKit.add_box(
 		self,
-		Vector3(DECK_SIZE.x + 16.0, 0.3, DECK_SIZE.y + 16.0),
-		Vector3(0.0, -0.35, 0.0),
+		Vector3(DECK_SIZE.x + 24.0, 0.28, DECK_SIZE.y + 24.0),
+		Vector3(0.0, -0.42, 0.0),
 		PropKit.COLOR_SAND,
 		PackedStringArray(["out_of_bounds"])
 	)
+	# Thin sand berm just outside the wall ring (visual beach pile-up, still OOB).
+	_build_sand_berm()
+
+
+func _build_sand_berm() -> void:
+	var half_x := DECK_SIZE.x * 0.5 + 0.9  # just outside wall
+	var half_z := DECK_SIZE.y * 0.5 + 0.9
+	var berm_h := 0.22
+	var berm_y := -0.18  # sits above apron, below deck lip
+	var thick := 1.4
+	# Four berm strips around pad (gap on south entrance left open-ish).
+	var strips: Array = [
+		# North
+		[Vector3(DECK_SIZE.x + 2.0, berm_h, thick), Vector3(0.0, berm_y, half_z)],
+		# East
+		[Vector3(thick, berm_h, DECK_SIZE.y + 2.0), Vector3(half_x, berm_y, 0.0)],
+		# West
+		[Vector3(thick, berm_h, DECK_SIZE.y + 2.0), Vector3(-half_x, berm_y, 0.0)],
+		# South west of entrance gap
+		[Vector3(12.0, berm_h, thick), Vector3(-16.0, berm_y, -half_z)],
+		# South east of entrance gap
+		[Vector3(20.0, berm_h, thick), Vector3(10.0, berm_y, -half_z)],
+	]
+	for s in strips:
+		PropKit.add_box(
+			self,
+			s[0],
+			s[1],
+			PropKit.COLOR_SAND,
+			PackedStringArray(["out_of_bounds"])
+		)
 
 
 func _build_deck_plates() -> void:
@@ -189,11 +223,43 @@ func _build_street_plaza() -> void:
 	bank.rotation.y = PI * 0.5  # slope along local +Z → world −X (into plaza)
 	add_child(bank)
 
-	# Flow: street → bowls (near z ≈ 0), climb north into snake
+	# --- Density extras (cap: 2 pads/ledges + 1 bank). XL-simple lines, readable gaps. ---
+	# ManualPad — mid plaza north of stairs; leaves spawn corridor (−6,−16) open
+	var pad = ManualPadScene.instantiate()
+	pad.name = "ManualPad"
+	pad.length = 3.5
+	pad.width = 2.2
+	pad.height = 0.28
+	pad.with_grind_lip = true
+	pad.position = Vector3(0.5, 0.0, -5.5)
+	pad.rotation.y = 0.0
+	add_child(pad)
+
+	# Ledge2 — SE street line, clear gap from Flatbar / StreetBank
+	var ledge2 = LedgeScene.instantiate()
+	ledge2.name = "Ledge2"
+	ledge2.length = 5.0
+	ledge2.depth = 0.4
+	ledge2.height = 0.5
+	ledge2.position = Vector3(8.0, 0.0, -14.0)
+	ledge2.rotation.y = 0.0
+	add_child(ledge2)
+
+	# StreetBank2 — far SW turnaround only (not maximalist clutter)
+	var bank2 = BankQpScene.instantiate()
+	bank2.name = "StreetBank2"
+	bank2.width = 3.5
+	bank2.height = 1.0
+	bank2.angle_deg = 28.0
+	bank2.position = Vector3(-16.0, 0.0, -8.0)
+	bank2.rotation.y = -PI * 0.5  # slope along local +Z → world +X (into plaza)
+	add_child(bank2)
+
+	# Flow: street → bowls (near z ≈ 0), climb north into snake — wider for aerial read
 	var into_snake = BankQpScene.instantiate()
 	into_snake.name = "PlazaToSnakeBank"
-	into_snake.width = 5.0
-	into_snake.height = 1.0
+	into_snake.width = 6.0
+	into_snake.height = 1.15
 	into_snake.angle_deg = 26.0
 	into_snake.position = Vector3(-4.0, 0.0, -1.0)
 	into_snake.rotation.y = 0.0  # slope along local +Z → world +Z (into bowls)
@@ -204,9 +270,11 @@ func _build_snake_bowls() -> void:
 	var snake := Node3D.new()
 	snake.name = "SnakeBowls"
 	add_child(snake)
-	# Two clean cylinder bowls (no pitched shard spam) — north cluster
+	# Clean cylinder bowls (no pitched shard spam) — north cluster silhouette
 	_place_simple_bowl(snake, Vector3(-6.0, 0.0, 8.0), 4.5, 1.8)
 	_place_simple_bowl(snake, Vector3(1.0, 0.0, 10.0), 4.0, 2.1)
+	# Third smaller snake pocket (NW) — aerial read without rubble
+	_place_simple_bowl(snake, Vector3(-12.0, 0.0, 12.5), 3.2, 1.5)
 	PropKit.add_box(
 		snake,
 		Vector3(2.5, 0.35, 3.0),
@@ -214,10 +282,18 @@ func _build_snake_bowls() -> void:
 		PropKit.COLOR_CONCRETE,
 		PackedStringArray(["bowl", "deck"])
 	)
+	# Hip deck between west bowls
+	PropKit.add_box(
+		snake,
+		Vector3(2.0, 0.3, 2.2),
+		Vector3(-9.0, -0.85, 10.5),
+		PropKit.COLOR_CONCRETE,
+		PackedStringArray(["bowl", "deck"])
+	)
 	var feed = BankQpScene.instantiate()
 	feed.name = "SnakeToCloverBank"
-	feed.width = 4.0
-	feed.height = 1.4
+	feed.width = 5.0
+	feed.height = 1.5
 	feed.angle_deg = 28.0
 	feed.position = Vector3(4.5, -0.15, 10.5)
 	feed.rotation.y = -PI * 0.55
@@ -261,14 +337,14 @@ func _build_clover_bowl() -> void:
 	clover.name = "CloverBowl"
 	add_child(clover)
 	var center := Vector3(8.0, 0.0, 11.0)
-	# One hero bowl — silhouette reads; no double-lobe rubble
-	_place_simple_bowl(clover, center, 6.0, 3.0)
+	# Hero bowl — slightly larger for aerial silhouette; still one clean cylinder
+	_place_simple_bowl(clover, center, 6.5, 3.0)
 	var hip = BankQpScene.instantiate()
 	hip.name = "CloverHip"
-	hip.width = 4.0
-	hip.height = 1.6
+	hip.width = 4.5
+	hip.height = 1.7
 	hip.angle_deg = 32.0
-	hip.position = center + Vector3(-5.5, 0.0, -3.0)
+	hip.position = center + Vector3(-5.8, 0.0, -3.2)
 	hip.rotation.y = PI * 0.35
 	clover.add_child(hip)
 
@@ -306,9 +382,10 @@ func _build_palms() -> void:
 
 func _build_zones() -> void:
 	# Mission Flow Area3D volumes — group name == node name (names kept exact).
-	_add_zone("zone_street", Vector3(0.0, 2.0, -10.0), Vector3(40.0, 6.0, 20.0))
-	_add_zone("zone_snake", Vector3(-2.5, 0.0, 9.0), Vector3(16.0, 8.0, 14.0))
-	_add_zone("zone_clover", Vector3(8.0, -0.5, 11.0), Vector3(16.0, 8.0, 14.0))
+	# Nudged: zone_snake west for third pocket; zone_clover for larger hero radius.
+	_add_zone("zone_street", Vector3(0.0, 2.0, -10.0), Vector3(42.0, 6.0, 20.0))
+	_add_zone("zone_snake", Vector3(-5.0, 0.0, 10.0), Vector3(20.0, 8.0, 16.0))
+	_add_zone("zone_clover", Vector3(8.0, -0.5, 11.0), Vector3(17.0, 8.0, 15.0))
 	_add_zone("zone_stairs_b", Vector3(-2.0, 1.5, -11.0), Vector3(6.0, 4.0, 6.0))
 
 
