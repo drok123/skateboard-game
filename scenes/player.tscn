@@ -13,9 +13,10 @@ height = 1.4
 [sub_resource type="BoxMesh" id="BoxMesh_board"]
 size = Vector3(0.52, 0.04, 1.28)
 
-[sub_resource type="StandardMaterial3D" id="Mat_board"]
-albedo_color = Color(0.15, 0.15, 0.18, 1)
-roughness = 0.4
+[sub_resource type="StandardMaterial3D" id="Mat_deck_top"]
+resource_name = "Mat_deck_top"
+albedo_color = Color(0.2, 0.14, 0.1, 1)
+roughness = 0.9
 
 [sub_resource type="StandardMaterial3D" id="Mat_rider"]
 albedo_color = Color(0.2, 0.55, 0.95, 1)
@@ -36,7 +37,7 @@ shape = SubResource("CapsuleShape3D_1")
 [node name="Board" type="MeshInstance3D" parent="MeshPivot"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)
 mesh = SubResource("BoxMesh_board")
-material_override = SubResource("Mat_board")
+material_override = SubResource("Mat_deck_top")
 script = ExtResource("5_board")
 
 [node name="Rider" type="MeshInstance3D" parent="MeshPivot"]
