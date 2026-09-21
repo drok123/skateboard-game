@@ -8,7 +8,7 @@ One session = skate Venice and learn its lines. No career, unlocks, or menus bey
 
 ## Session loop
 
-1. **Spawn** west entrance (`SpawnPoint` facing plaza).
+1. **Spawn** south street entrance (`SpawnPoint` facing north/+Z into plaza).
 2. **Active goal** (one at a time) — soft objective, not a gate.
 3. **Checkpoint** = player did the named action in the right zone (zone marker + optional prop group).
 4. **Clear** → brief HUD ping → next goal, or free skate if last.

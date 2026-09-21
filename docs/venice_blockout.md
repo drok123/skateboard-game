@@ -19,33 +19,32 @@ Replace the tiny procedural park in `scripts/main.gd` with a **readable Venice-i
 | Deck / flat height | top of bowls | **Y = 0** deck |
 | Bowl floor | deep pools below deck | **Y = −2.4 to −3.2** (clover deepest) |
 
-**Player spawn:** street flat near entrance (west), facing east into the flow: `(-18, 1.2, 4)`.
+**Player spawn:** street flat near south entrance, facing north (+Z) into the park: `(-6, 1.2, -16)`.
 
 Compress slightly vs real Venice so a single camera follow stays readable; keep relative proportions of bowls vs street.
 
 ## North / orientation (in-game map)
 
-Camera-friendly top-down (Z+ = “north” toward open sand in the photo):
+Camera-friendly top-down (**Z+ = north**). Remap vs Derron aerials: **bowls NORTH, street SOUTH**.
 
 ```
-                    Z+  (sand / ocean vibe)
+                    Z+  (north — bowl cluster)
     ┌──────────────────────────────────────────┐
     │  PERIMETER WALL + RAIL (all sides)       │
     │                                          │
-    │  W STREET PLAZA              E           │
-    │  [stairs A] [hubba] [flatbar]            │
-    │  [stairs B] [ledge] [manual pad]         │
+    │  SNAKE BOWLS (NW/N)     ★ CLOVER (NE)    │
+    │     hips + shallow         deep hero     │
     │                                          │
-    │  ○ palm cluster (W)     ○ ○ ○ palms (SE) │
+    │         bank street → bowls (z ≈ 0)      │
+    │                      ○ palm cluster (E)  │
     │                                          │
-    │  FLOW / SNAKE BOWLS (center-west)        │
-    │     hips + shallow transitions           │
+    │  W STREET PLAZA (south)              E   │
+    │  [stairs A] [hubba] [ledge] [flatbar]    │
+    │  [stairs B + rail]          ○ ○ palms SE │
     │                                          │
-    │              ★ CLOVER / PEANUT BOWL (SE) │
-    │                 deep + full coping       │
     └──────────────────────────────────────────┘
-                    Z−
-         Entrance / beach walk ≈ west (−X)
+                    Z−  (south — street / entrance)
+         Entrance gap on south near spawn (−6, −16)
 ```
 
 ## Zones
@@ -55,7 +54,7 @@ Camera-friendly top-down (Z+ = “north” toward open sand in the photo):
 - Thin metal rail on top (thin boxes or cylinders) — **not grindable** in v1 (visual only) so players don’t leave the park on a rail grind.
 - Outside wall: flat sand-colored ground plane extending ~8 m (kill volume or soft reset later).
 
-### B — Street plaza (north / northeast)
+### B — Street plaza (south)
 Teach: push, carve, ollie onto ledges, stair gaps, flatbar grind approaches.
 
 | Piece | Approx size (m) | Notes |
@@ -67,14 +66,14 @@ Teach: push, carve, ollie onto ledges, stair gaps, flatbar grind approaches.
 | Flatbar | 5 × 0.12 × 0.12 @ 0.45 high | grindable |
 | Small bank / QP | 4 wide, ~1.2 high, ~30° | feeds back to flat |
 
-### C — Flow / snake bowls (center-west)
+### C — Flow / snake bowls (north)
 Teach: pump, carve walls, hip transfers, keep speed without ollie.
 
 - 2–3 linked kidney/oval depressions, depth **−1.6 to −2.2**.
 - Transitions: use rotated boxes / CSG torus slices / stacked wedges approximating quarter-pipes.
 - Hips where walls meet — leave a clear transfer line toward the clover.
 
-### D — Clover / peanut bowl (southeast)
+### D — Clover / peanut bowl (northeast)
 Hero feature. Teach: drop-in, full carve loops, coping rides (when grind exists).
 
 - Irregular peanut / rounded clover footprint ~12 × 10 m.
@@ -82,8 +81,8 @@ Hero feature. Teach: drop-in, full carve loops, coping rides (when grind exists)
 - 1–2 shallow “hips” toward snake bowls for line continuity.
 
 ### E — Palm planters
-- **West:** one raised circular planter (~3 m radius) with 4–5 palm trunks (collision on planter curb only).
-- **Southeast near clover:** three separate circular planters, one palm each.
+- **East:** one raised circular planter (~3 m radius) with 4–5 palm trunks (collision on planter curb only).
+- **Southeast street edge:** three separate circular planters, one palm each.
 - Planter curbs = low ledges (optional light grind).
 
 ## Teach lines (for Mission Flow)
@@ -149,7 +148,7 @@ Build modular, collision-friendly primitives first:
 
 ## Done when
 
-- Venice zones readable from aerial comparison (bowls SE/W, street N, palms, perimeter).
+- Venice zones readable from aerial comparison (bowls N, street S, palms, perimeter).
 - Player can push street, drop a bowl, and return without falling through.
 - Spawn + camera stay inside bounds.
 - Grindable edges tagged for Physics.

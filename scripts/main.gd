@@ -2,7 +2,7 @@ extends Node3D
 ## Instances the Venice Beach park blockout and wires player + camera.
 
 const VeniceBeachScene := preload("res://scenes/parks/venice_beach.tscn")
-const SPAWN_POS := Vector3(-18.0, 1.2, 4.0)
+const SPAWN_POS := Vector3(-6.0, 1.2, -16.0)
 
 
 func _ready() -> void:
@@ -11,8 +11,8 @@ func _ready() -> void:
 	if player:
 		player.add_to_group("player")
 		player.global_position = SPAWN_POS
-		# Face east into the park flow.
-		player.rotation.y = -PI * 0.5
+		# Face north (+Z) into the park from the south street entrance.
+		player.rotation.y = 0.0
 	var cam := $FollowCamera as Camera3D
 	if cam and player:
 		cam.set("target_path", cam.get_path_to(player))

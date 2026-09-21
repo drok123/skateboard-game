@@ -1,5 +1,6 @@
 extends Node3D
-## Venice Beach skatepark blockout: street plaza N, snake bowls CW, clover SE.
+## Venice Beach skatepark blockout: street plaza SOUTH (−Z), bowl cluster NORTH (+Z).
+## Orientation: Z+ = north. Simple bowls only (cylinder floor + 8 wall slabs + 4 coping).
 
 const StairsSetScene := preload("res://scenes/parks/modules/stairs_set.tscn")
 const LedgeScene := preload("res://scenes/parks/modules/ledge.tscn")
@@ -12,7 +13,8 @@ const PlanterRoundScene := preload("res://scenes/parks/modules/planter_round.tsc
 ## Playable concrete pad (X × Z). Deck top at Y = 0.
 const DECK_SIZE := Vector2(48.0, 40.0)
 const WALL_H := 1.1
-const SPAWN_POS := Vector3(-18.0, 1.2, 4.0)
+## South street entrance, facing north (+Z) into the park.
+const SPAWN_POS := Vector3(-6.0, 1.2, -16.0)
 
 
 func _ready() -> void:
@@ -50,16 +52,22 @@ func _build_sand_apron() -> void:
 
 
 func _build_deck_plates() -> void:
-	# Coarse deck plates with bowl holes — no apron filler spam.
+	# Coarse deck plates: solid south street; holes only for north bowls — no apron filler spam.
 	var plates: Array = [
-		[Vector3(48.0, 0.4, 14.0), Vector3(0.0, -0.2, 13.0)],
-		[Vector3(48.0, 0.4, 5.0), Vector3(0.0, -0.2, -17.5)],
-		[Vector3(11.0, 0.4, 22.0), Vector3(-18.5, -0.2, -4.0)],
-		[Vector3(8.0, 0.4, 22.0), Vector3(20.0, -0.2, -4.0)],
-		[Vector3(4.0, 0.4, 12.0), Vector3(3.5, -0.2, -1.0)],
-		[Vector3(12.0, 0.4, 8.0), Vector3(10.0, -0.2, 1.0)],
-		[Vector3(14.0, 0.4, 7.0), Vector3(-6.0, -0.2, -11.5)],
-		[Vector3(10.0, 0.4, 8.0), Vector3(14.0, -0.2, 6.0)],
+		# Solid south street plaza (z −20 .. 0)
+		[Vector3(48.0, 0.4, 20.0), Vector3(0.0, -0.2, -10.0)],
+		# North strip beyond bowls (z ~16..20)
+		[Vector3(48.0, 0.4, 4.0), Vector3(0.0, -0.2, 18.0)],
+		# West of snake bowls
+		[Vector3(12.0, 0.4, 16.0), Vector3(-18.0, -0.2, 8.0)],
+		# East of clover / east planter pad
+		[Vector3(8.0, 0.4, 16.0), Vector3(20.0, -0.2, 8.0)],
+		# Mid strip south of bowls / north of street (leaves bowl openings north)
+		[Vector3(48.0, 0.4, 4.0), Vector3(0.0, -0.2, 2.0)],
+		# NE corner past clover lip
+		[Vector3(10.0, 0.4, 6.0), Vector3(14.0, -0.2, 16.0)],
+		# NW corner past snake lip
+		[Vector3(10.0, 0.4, 6.0), Vector3(-14.0, -0.2, 14.0)],
 	]
 	for p in plates:
 		PropKit.add_box(
@@ -72,18 +80,18 @@ func _build_deck_plates() -> void:
 
 
 func _build_perimeter() -> void:
-	# Rounded-rect ring of wall segments. Gap on west for entrance (~z 1..7).
+	# Rounded-rect ring of wall segments. Gap on south for entrance near spawn.
 	var half_x := DECK_SIZE.x * 0.5  # 24
 	var half_z := DECK_SIZE.y * 0.5  # 20
 	var seg := 4.0
 	# North wall (z = +half_z)
 	_wall_run(Vector3(0.0, 0.0, half_z), half_x * 2.0, 0.0, seg)
-	# South wall (z = -half_z)
-	_wall_run(Vector3(0.0, 0.0, -half_z), half_x * 2.0, PI, seg)
 	# East wall (x = +half_x)
 	_wall_run(Vector3(half_x, 0.0, 0.0), half_z * 2.0, -PI * 0.5, seg)
-	# West wall with entrance gap around z=4
-	_wall_run_west_with_gap(half_x, half_z, seg)
+	# West wall (x = -half_x)
+	_wall_run(Vector3(-half_x, 0.0, 0.0), half_z * 2.0, PI * 0.5, seg)
+	# South wall with entrance gap around spawn x≈−6
+	_wall_run_south_with_gap(half_x, half_z, seg)
 
 
 func _wall_run(center: Vector3, total_len: float, yaw: float, seg_len: float) -> void:
@@ -103,53 +111,53 @@ func _wall_run(center: Vector3, total_len: float, yaw: float, seg_len: float) ->
 		add_child(w)
 
 
-func _wall_run_west_with_gap(half_x: float, half_z: float, seg_len: float) -> void:
-	# West face at x = -half_x, along +Z from -half_z to +half_z. Gap z 1..7.
-	var x := -half_x
+func _wall_run_south_with_gap(half_x: float, half_z: float, seg_len: float) -> void:
+	# South face at z = -half_z, along +X from -half_x to +half_x. Gap x −10..−2 (near spawn).
+	var z := -half_z
 	var spans: Array = [
-		[-half_z, 1.0],
-		[7.0, half_z],
+		[-half_x, -10.0],
+		[-2.0, half_x],
 	]
 	for span in spans:
-		var z0: float = span[0]
-		var z1: float = span[1]
-		var total := z1 - z0
+		var x0: float = span[0]
+		var x1: float = span[1]
+		var total := x1 - x0
 		if total < 0.5:
 			continue
 		var n := maxi(int(ceil(total / seg_len)), 1)
 		var actual := total / float(n)
 		for i in range(n):
-			var z := z0 + actual * (float(i) + 0.5)
+			var x := x0 + actual * (float(i) + 0.5)
 			var w = PerimeterWallScene.instantiate()
 			w.length = actual
 			w.wall_height = WALL_H
 			w.rail_grindable = false
 			w.position = Vector3(x, 0.0, z)
-			w.rotation.y = PI * 0.5  # wall faces outward (-X)
+			w.rotation.y = PI  # wall faces outward (−Z)
 			add_child(w)
 
 
 func _build_street_plaza() -> void:
-	# North plaza street obstacles.
-	# Stairs A — 3-step + hubba (west of plaza)
+	# South plaza street obstacles (z roughly −16..−4).
+	# Stairs A — 3-step + hubba (SW)
 	var stairs_a = StairsSetScene.instantiate()
 	stairs_a.name = "StairsA"
 	stairs_a.step_count = 3
 	stairs_a.width = 3.0
 	stairs_a.with_hubba = true
 	stairs_a.with_handrail = false
-	stairs_a.position = Vector3(-10.0, 0.0, 10.0)
-	stairs_a.rotation.y = 0.0  # climb toward +Z (north)
+	stairs_a.position = Vector3(-10.0, 0.0, -12.0)
+	stairs_a.rotation.y = 0.0  # climb toward +Z (north / into park)
 	add_child(stairs_a)
 
-	# Stairs B — 4–5 set + handrail
+	# Stairs B — 5-set + handrail
 	var stairs_b = StairsSetScene.instantiate()
 	stairs_b.name = "StairsB"
 	stairs_b.step_count = 5
 	stairs_b.width = 3.5
 	stairs_b.with_hubba = false
 	stairs_b.with_handrail = true
-	stairs_b.position = Vector3(-4.0, 0.0, 10.0)
+	stairs_b.position = Vector3(-2.0, 0.0, -12.0)
 	stairs_b.rotation.y = 0.0
 	add_child(stairs_b)
 
@@ -159,7 +167,7 @@ func _build_street_plaza() -> void:
 	ledge.length = 7.0
 	ledge.depth = 0.45
 	ledge.height = 0.55
-	ledge.position = Vector3(4.0, 0.0, 13.5)
+	ledge.position = Vector3(5.0, 0.0, -8.0)
 	ledge.rotation.y = 0.0  # along +X
 	add_child(ledge)
 
@@ -168,42 +176,41 @@ func _build_street_plaza() -> void:
 	bar.name = "Flatbar"
 	bar.length = 5.0
 	bar.height = 0.45
-	bar.position = Vector3(11.0, 0.0, 11.0)
+	bar.position = Vector3(11.0, 0.0, -10.0)
 	add_child(bar)
 
-	# Small bank / QP feeding back to flat (faces west into plaza)
+	# Small bank / QP in SE street
 	var bank = BankQpScene.instantiate()
 	bank.name = "StreetBank"
 	bank.width = 4.0
 	bank.height = 1.2
 	bank.angle_deg = 30.0
-	bank.position = Vector3(16.0, 0.0, 8.0)
-	bank.rotation.y = PI * 0.5  # slope along local +Z → world -X (into plaza)
+	bank.position = Vector3(14.0, 0.0, -6.0)
+	bank.rotation.y = PI * 0.5  # slope along local +Z → world −X (into plaza)
 	add_child(bank)
 
-	# Flow: plaza → snake (south into bowls)
+	# Flow: street → bowls (near z ≈ 0), climb north into snake
 	var into_snake = BankQpScene.instantiate()
 	into_snake.name = "PlazaToSnakeBank"
 	into_snake.width = 5.0
 	into_snake.height = 1.0
 	into_snake.angle_deg = 26.0
-	into_snake.position = Vector3(-6.0, 0.0, 6.2)
-	into_snake.rotation.y = PI  # slope along local +Z → world -Z (into snake)
+	into_snake.position = Vector3(-4.0, 0.0, -1.0)
+	into_snake.rotation.y = 0.0  # slope along local +Z → world +Z (into bowls)
 	add_child(into_snake)
-
 
 
 func _build_snake_bowls() -> void:
 	var snake := Node3D.new()
 	snake.name = "SnakeBowls"
 	add_child(snake)
-	# Two clean cylinder bowls (no pitched shard spam)
-	_place_simple_bowl(snake, Vector3(-8.0, 0.0, -1.0), 4.5, 1.8)
-	_place_simple_bowl(snake, Vector3(-2.0, 0.0, 1.5), 4.0, 2.1)
+	# Two clean cylinder bowls (no pitched shard spam) — north cluster
+	_place_simple_bowl(snake, Vector3(-6.0, 0.0, 8.0), 4.5, 1.8)
+	_place_simple_bowl(snake, Vector3(1.0, 0.0, 10.0), 4.0, 2.1)
 	PropKit.add_box(
 		snake,
 		Vector3(2.5, 0.35, 3.0),
-		Vector3(-5.0, -1.0, 0.2),
+		Vector3(-2.5, -1.0, 9.0),
 		PropKit.COLOR_CONCRETE,
 		PackedStringArray(["bowl", "deck"])
 	)
@@ -212,8 +219,8 @@ func _build_snake_bowls() -> void:
 	feed.width = 4.0
 	feed.height = 1.4
 	feed.angle_deg = 28.0
-	feed.position = Vector3(1.0, -0.15, -3.5)
-	feed.rotation.y = -PI * 0.35
+	feed.position = Vector3(4.5, -0.15, 10.5)
+	feed.rotation.y = -PI * 0.55
 	snake.add_child(feed)
 
 
@@ -253,7 +260,7 @@ func _build_clover_bowl() -> void:
 	var clover := Node3D.new()
 	clover.name = "CloverBowl"
 	add_child(clover)
-	var center := Vector3(10.0, 0.0, -10.0)
+	var center := Vector3(8.0, 0.0, 11.0)
 	# One hero bowl — silhouette reads; no double-lobe rubble
 	_place_simple_bowl(clover, center, 6.0, 3.0)
 	var hip = BankQpScene.instantiate()
@@ -261,28 +268,28 @@ func _build_clover_bowl() -> void:
 	hip.width = 4.0
 	hip.height = 1.6
 	hip.angle_deg = 32.0
-	hip.position = center + Vector3(-5.5, 0.0, 4.0)
-	hip.rotation.y = PI * 0.7
+	hip.position = center + Vector3(-5.5, 0.0, -3.0)
+	hip.rotation.y = PI * 0.35
 	clover.add_child(hip)
 
 
 func _build_palms() -> void:
-	# West cluster — one raised planter, upright trunks
-	var west = PlanterRoundScene.instantiate()
-	west.name = "PalmClusterWest"
-	west.radius = 3.0
-	west.curb_height = 0.4
-	west.palm_count = 5
-	west.palm_height = 6.5
-	west.grindable_curb = true
-	west.position = Vector3(-15.0, 0.0, 2.0)
-	west.rotation = Vector3.ZERO
-	add_child(west)
+	# East cluster — one raised planter (Props owns thin-trunk planter_round)
+	var east = PlanterRoundScene.instantiate()
+	east.name = "PalmClusterEast"
+	east.radius = 3.0
+	east.curb_height = 0.4
+	east.palm_count = 5
+	east.palm_height = 6.5
+	east.grindable_curb = true
+	east.position = Vector3(16.0, 0.0, 0.0)
+	east.rotation = Vector3.ZERO
+	add_child(east)
 
-	# Three SE planters near clover — keep upright (no inherited tilt)
+	# A few singles along SE street edge
 	var se_spots: Array = [
-		Vector3(14.0, 0.0, -4.5),
-		Vector3(17.0, 0.0, -8.0),
+		Vector3(14.0, 0.0, -8.0),
+		Vector3(17.0, 0.0, -12.0),
 		Vector3(12.5, 0.0, -15.5),
 	]
 	for i in range(se_spots.size()):
@@ -298,11 +305,11 @@ func _build_palms() -> void:
 
 
 func _build_zones() -> void:
-	# Mission Flow Area3D volumes — group name == node name.
-	_add_zone("zone_street", Vector3(0.0, 2.0, 13.0), Vector3(40.0, 6.0, 14.0))
-	_add_zone("zone_snake", Vector3(-5.0, 0.0, 0.0), Vector3(16.0, 8.0, 14.0))
-	_add_zone("zone_clover", Vector3(10.0, -0.5, -10.0), Vector3(16.0, 8.0, 14.0))
-	_add_zone("zone_stairs_b", Vector3(-4.0, 1.5, 11.0), Vector3(6.0, 4.0, 6.0))
+	# Mission Flow Area3D volumes — group name == node name (names kept exact).
+	_add_zone("zone_street", Vector3(0.0, 2.0, -10.0), Vector3(40.0, 6.0, 20.0))
+	_add_zone("zone_snake", Vector3(-2.5, 0.0, 9.0), Vector3(16.0, 8.0, 14.0))
+	_add_zone("zone_clover", Vector3(8.0, -0.5, 11.0), Vector3(16.0, 8.0, 14.0))
+	_add_zone("zone_stairs_b", Vector3(-2.0, 1.5, -11.0), Vector3(6.0, 4.0, 6.0))
 
 
 func _add_zone(zone_name: String, pos: Vector3, size: Vector3) -> void:
