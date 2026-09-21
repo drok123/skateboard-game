@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://bpropcoping01"]
+
+[ext_resource type="Script" path="res://scripts/parks/modules/coping_edge.gd" id="1_script"]
+
+[node name="coping_edge" type="Node3D"]
+script = ExtResource("1_script")

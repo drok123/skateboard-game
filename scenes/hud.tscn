@@ -118,6 +118,30 @@ text = "COMBO  0"
 label_settings = SubResource("LabelSettings_hud")
 horizontal_alignment = 2
 
+
+[node name="GoalRow" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+alignment = 1
+
+[node name="GoalPanel" type="PanelContainer" parent="Margin/Root/GoalRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleBox_panel")
+
+[node name="GoalMargin" type="MarginContainer" parent="Margin/Root/GoalRow/GoalPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 8
+
+[node name="GoalLabel" type="Label" parent="Margin/Root/GoalRow/GoalPanel/GoalMargin"]
+layout_mode = 2
+text = "GOAL"
+label_settings = SubResource("LabelSettings_hud")
+autowrap_mode = 3
+horizontal_alignment = 1
+
 [node name="MidSpacer" type="Control" parent="Margin/Root"]
 layout_mode = 2
 size_flags_vertical = 3

@@ -15,6 +15,7 @@ var combo: int = 0
 
 @onready var _speed_label: Label = $Margin/Root/TopRow/SpeedPanel/SpeedMargin/SpeedLabel
 @onready var _combo_label: Label = $Margin/Root/TopRow/ComboPanel/ComboMargin/ComboLabel
+@onready var _goal_label: Label = $Margin/Root/GoalRow/GoalPanel/GoalMargin/GoalLabel
 @onready var _toast_label: Label = $Margin/Root/ToastAnchor/ToastPanel/ToastMargin/ToastLabel
 @onready var _toast_panel: PanelContainer = $Margin/Root/ToastAnchor/ToastPanel
 @onready var _hint_panel: PanelContainer = $Margin/Root/HintRow/HintPanel
@@ -39,6 +40,7 @@ func _ready() -> void:
 	_toast_panel.modulate.a = 0.0
 	_toast_label.text = ""
 	_set_combo_label(0)
+	set_objective("Warm-up street — Push the plaza")
 	_resolve_player()
 	# Short delay so the hint is readable before move/jump can dismiss it.
 	get_tree().create_timer(hint_grace_sec).timeout.connect(_on_hint_grace_done)
@@ -64,6 +66,13 @@ func show_toast(text: String) -> void:
 	_toast_tween = create_tween()
 	_toast_tween.tween_interval(toast_hold_sec)
 	_toast_tween.tween_property(_toast_panel, "modulate:a", 0.0, toast_fade_sec)
+
+
+func set_objective(text: String) -> void:
+	## Public API — one-line session goal / hint (Mission Flow).
+	if _goal_label == null:
+		return
+	_goal_label.text = text if not text.is_empty() else "Free skate"
 
 
 func set_combo(value: int) -> void:

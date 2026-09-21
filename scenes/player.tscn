@@ -1,6 +1,9 @@
-[gd_scene load_steps=7 format=3 uid="uid://bskateplayer01"]
+[gd_scene load_steps=10 format=3 uid="uid://bskateplayer01"]
 
 [ext_resource type="Script" path="res://scripts/player.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/trick_system.gd" id="2_tricks"]
+[ext_resource type="Script" path="res://scripts/player_input.gd" id="3_input"]
+[ext_resource type="Script" path="res://scripts/emily_visual.gd" id="4_emily"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.35
@@ -20,7 +23,7 @@ roughness = 0.4
 [sub_resource type="StandardMaterial3D" id="Mat_rider"]
 albedo_color = Color(0.2, 0.55, 0.95, 1)
 
-[node name="Player" type="CharacterBody3D"]
+[node name="Player" type="CharacterBody3D" groups=["player"]]
 collision_layer = 2
 collision_mask = 1
 floor_stop_on_slope = true
@@ -42,3 +45,25 @@ material_override = SubResource("Mat_board")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
 mesh = SubResource("CapsuleMesh_rider")
 material_override = SubResource("Mat_rider")
+
+[node name="Emily" type="Node3D" parent="MeshPivot"]
+script = ExtResource("4_emily")
+
+[node name="LookTarget" type="Marker3D" parent="MeshPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, 0)
+
+[node name="PlayerInput" type="Node" parent="."]
+script = ExtResource("3_input")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+
+[node name="TrickSystem" type="Node" parent="."]
+script = ExtResource("2_tricks")
+
+[node name="SfxOllie" type="AudioStreamPlayer3D" parent="."]
+bus = &"Master"
+max_distance = 24.0
+
+[node name="SfxLand" type="AudioStreamPlayer3D" parent="."]
+bus = &"Master"
+max_distance = 24.0

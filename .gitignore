@@ -19,3 +19,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.tmp
+
+# Local-only / oversized reference media (not for GitHub)
+references/animation/

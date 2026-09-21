@@ -2,6 +2,9 @@ extends CharacterBody3D
 ## Skate feel: push, carve lean, ollie pop, landing stick.
 ## Player Controller feeds wish + jump via apply_movement; Physics owns velocity.
 
+signal sfx_ollie()
+signal sfx_land(impact: float)
+
 const MAX_SPEED := 12.5
 const PUSH_ACCEL := 18.0
 const CARVE_ACCEL := 10.0
@@ -23,6 +26,8 @@ const SECONDARY_RECOVER_RATE := 1.8
 @onready var board: MeshInstance3D = $MeshPivot/Board
 @onready var rider: MeshInstance3D = $MeshPivot/Rider
 @onready var _tricks: Node = get_node_or_null("TrickSystem")
+@onready var _sfx_ollie: AudioStreamPlayer3D = get_node_or_null("SfxOllie")
+@onready var _sfx_land: AudioStreamPlayer3D = get_node_or_null("SfxLand")
 
 var _facing := 0.0
 var _was_on_floor := true
@@ -42,17 +47,20 @@ func apply_movement(wish: Vector3, jump_pressed: bool, delta: float) -> void:
 		wish = wish.normalized()
 
 	var on_floor := is_on_floor()
+	var land_impact := 0.0
 
 	# Gravity
 	if not on_floor:
 		velocity.y = maxf(velocity.y - GRAVITY * delta, MAX_FALL)
 		_airborne = true
 	elif velocity.y < 0.0:
+		# Capture downward speed before stick-zero so land SFX can scale.
+		land_impact = clampf((-velocity.y) / 18.0, 0.15, 1.0)
 		velocity.y = 0.0
 
 	# Landing stick: floor after air
 	if on_floor and not _was_on_floor:
-		_on_landed()
+		_on_landed(land_impact)
 
 	# Ollie pop
 	if jump_pressed and on_floor:
@@ -124,18 +132,22 @@ func _do_ollie() -> void:
 	_active_air_trick = "ollie"
 	_ollie_squash()
 	set_secondary_intensity(0.55)
+	_play_sfx_ollie()
 	if _tricks and _tricks.has_method("notify_trick_started"):
 		_tricks.notify_trick_started("ollie")
 
 
-func _on_landed() -> void:
+func _on_landed(impact: float = 0.35) -> void:
 	# Stick the landing: bleed a little speed, kill bounce.
+	if impact <= 0.0:
+		impact = 0.35
 	velocity.x *= LAND_STICK
 	velocity.z *= LAND_STICK
 	velocity.y = 0.0
 	_board_lean *= 0.3
 	_land_squash()
 	set_secondary_intensity(0.0)
+	_play_sfx_land(impact)
 	if _airborne and _active_air_trick != "":
 		if _tricks and _tricks.has_method("notify_trick_landed"):
 			_tricks.notify_trick_landed(_active_air_trick)
@@ -179,3 +191,17 @@ func _land_squash() -> void:
 	var tw := create_tween()
 	tw.tween_property(mesh, "scale", Vector3(1.18, 0.72, 1.18), 0.05)
 	tw.tween_property(mesh, "scale", Vector3.ONE, 0.16)
+
+## Placeholder SFX hooks (Squad 3). Streams empty until assets land; signals for listeners.
+func _play_sfx_ollie() -> void:
+	sfx_ollie.emit()
+	if _sfx_ollie:
+		_sfx_ollie.play()
+
+
+func _play_sfx_land(impact: float) -> void:
+	sfx_land.emit(impact)
+	if _sfx_land:
+		_sfx_land.volume_db = lerpf(-8.0, 0.0, clampf(impact, 0.0, 1.0))
+		_sfx_land.play()
+
