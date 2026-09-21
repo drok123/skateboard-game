@@ -1,12 +1,13 @@
 extends Node3D
 ## Playable Emily under MeshPivot — stance mesh, feet on deck, never the white T-pose.
-## Capsule Rider is lean proxy only (forced hidden). Skinned + textured rig replaces this later.
+## Capsule Rider is lean proxy only (forced hidden). Prefers skinned GLB when present; never T-pose.
 ##
 ## Node contract (see docs/character-rig.md):
 ##   Emily (this) → EmilyMesh (imported GLB root) → optional Skeleton3D (future)
 ##               → BoardSocket (Marker3D at deck contact)
 
 const STANCE_GLB := "res://assets/characters/emily_skater_stance.glb"
+const SKINNED_GLB := "res://assets/characters/emily_skater_skinned.glb"
 ## T-pose source kept on disk for Art — do NOT load it as the playable visual.
 const TPOSE_GLB := "res://assets/characters/emily_skater.glb"
 const BOARD_SOCKET_NAME := "BoardSocket"
@@ -17,14 +18,17 @@ const MESH_NAME := "EmilyMesh"
 @export var sole_sink := 0.02
 @export var yaw_offset := PI
 @export var model_scale := 0.92
-## Material policy (P0): prefer imported GLB materials; else style-bible sun-kissed skin.
-## Dark athletic block only when force_silhouette_block is true (debug / extreme washout).
-@export var body_albedo := Color(0.82, 0.64, 0.52, 1.0)  ## sun-kissed skin stand-in
-@export var hair_albedo := Color(0.72, 0.62, 0.42, 1.0)  ## honey/ash blonde (future slots)
-@export var clothing_albedo := Color(0.14, 0.15, 0.17, 1.0)  ## dark athletic (future slots)
+## Material policy (skate. readability):
+## 1) Prefer authored/textured GLB materials.
+## 2) Named surfaces (skin/hair/cloth) → style-bible slot colors.
+## 3) Single untextured mesh → dark athletic stand-in so she pops in sunny Venice
+##    (not blue/gray mannequin; not full-body skin wash). Skin/hair wait on UV slots.
+@export var body_albedo := Color(0.82, 0.64, 0.52, 1.0)  ## sun-kissed skin
+@export var hair_albedo := Color(0.72, 0.62, 0.42, 1.0)  ## honey/ash blonde
+@export var clothing_albedo := Color(0.10, 0.11, 0.13, 1.0)  ## dark athletic kit
 @export var body_roughness := 0.72
-@export var force_silhouette_block := false
-## Future skinned GLB path (unused until Art ships weights). Keep stance for playable.
+@export var force_silhouette_block := false  ## debug: force clothing block on every surface
+## Optional override; default prefers SKINNED_GLB then STANCE_GLB. Never T-pose.
 @export_file("*.glb") var skinned_glb_path := ""
 
 ## Cached after import — null while unskinned stance mesh is live.
@@ -91,7 +95,13 @@ func _load_emily() -> void:
 		child.queue_free()
 	skeleton = null
 
-	var root := _import_glb(STANCE_GLB)
+	var path := SKINNED_GLB if FileAccess.file_exists(SKINNED_GLB) or ResourceLoader.exists(SKINNED_GLB) else STANCE_GLB
+	if skinned_glb_path != "" and (FileAccess.file_exists(skinned_glb_path) or ResourceLoader.exists(skinned_glb_path)):
+		path = skinned_glb_path
+	var root := _import_glb(path)
+	if root == null and path != STANCE_GLB:
+		push_warning("Skinned Emily failed (%s) — falling back to stance" % path)
+		root = _import_glb(STANCE_GLB)
 	if root == null:
 		push_error("Playable Emily missing stance GLB at %s — refusing T-pose fallback" % STANCE_GLB)
 		_ensure_board_socket(Vector3(0.0, deck_top_y - sole_sink, 0.0))
@@ -100,7 +110,7 @@ func _load_emily() -> void:
 	root.name = MESH_NAME
 	root.scale = Vector3.ONE * model_scale
 	root.rotation.y = yaw_offset
-	_apply_prototype_material(root)
+	_apply_prototype_material(root)  # real-mats path + sunny silhouette stand-in
 	add_child(root)
 
 	skeleton = _find_skeleton(root)
@@ -146,8 +156,7 @@ func _find_skeleton(node: Node) -> Skeleton3D:
 
 
 func _apply_prototype_material(node: Node) -> void:
-	## Prefer real GLB materials. Only invent a style-bible stand-in when the mesh
-	## has no textured / authored albedo (current stance GLB is untextured).
+	## Real-materials path for Character Rigging + skate. sunny silhouette now.
 	for child in node.find_children("*", "MeshInstance3D", true, false):
 		var mi := child as MeshInstance3D
 		if mi == null:
@@ -155,12 +164,59 @@ func _apply_prototype_material(node: Node) -> void:
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		mi.material_override = null
 		if force_silhouette_block:
-			mi.material_override = _make_mat(clothing_albedo, 0.9, 0.2)
+			mi.material_override = _make_mat(clothing_albedo, 0.92, 0.2)
+			continue
+		if _apply_named_slot_materials(mi):
 			continue
 		if _mesh_has_authored_look(mi):
 			continue
-		# Untextured single-material sculpt → sun-kissed skin (not blue mannequin).
-		mi.material_override = _make_mat(body_albedo, body_roughness, 0.35)
+		# Single untextured sculpt: dark athletic kit reads at gameplay distance
+		# under Venice sun (style bible clothing block). Not blue/gray plastic.
+		mi.material_override = _make_mat(clothing_albedo, 0.9, 0.22)
+
+
+func _apply_named_slot_materials(mi: MeshInstance3D) -> bool:
+	## When Rigging ships multi-surface / named mats, map style-bible slots.
+	if mi.mesh == null:
+		return false
+	var applied := false
+	for surf in range(mi.mesh.get_surface_count()):
+		var mat := mi.get_active_material(surf)
+		var slot := _slot_from_material(mat, mi.name)
+		if slot == "":
+			continue
+		var stand_in: StandardMaterial3D
+		match slot:
+			"skin":
+				stand_in = _make_mat(body_albedo, body_roughness, 0.35)
+			"hair":
+				stand_in = _make_mat(hair_albedo, 0.78, 0.3)
+			"clothing":
+				stand_in = _make_mat(clothing_albedo, 0.9, 0.2)
+			_:
+				continue
+		# Prefer textures if present; only replace flat/default slots.
+		if mat is BaseMaterial3D and (mat as BaseMaterial3D).albedo_texture != null:
+			applied = true
+			continue
+		mi.set_surface_override_material(surf, stand_in)
+		applied = true
+	return applied
+
+
+func _slot_from_material(mat: Material, node_name: String) -> String:
+	var key := node_name.to_lower()
+	if mat != null:
+		key += " " + mat.resource_name.to_lower()
+		if mat is Resource and mat.resource_path != "":
+			key += " " + mat.resource_path.get_file().to_lower()
+	if "hair" in key or "scalp" in key:
+		return "hair"
+	if "skin" in key or "body" in key or "face" in key or "arm" in key or "leg" in key:
+		return "skin"
+	if "cloth" in key or "shirt" in key or "pant" in key or "top" in key or "short" in key or "outfit" in key:
+		return "clothing"
+	return ""
 
 
 func _make_mat(albedo: Color, roughness: float, specular: float) -> StandardMaterial3D:
@@ -175,7 +231,6 @@ func _make_mat(albedo: Color, roughness: float, specular: float) -> StandardMate
 func _mesh_has_authored_look(mi: MeshInstance3D) -> bool:
 	if mi.mesh == null:
 		return false
-	# Any surface material with a texture or non-default named look counts as authored.
 	for surf in range(mi.mesh.get_surface_count()):
 		var mat := mi.get_active_material(surf)
 		if mat == null:
@@ -184,7 +239,6 @@ func _mesh_has_authored_look(mi: MeshInstance3D) -> bool:
 			var bm := mat as BaseMaterial3D
 			if bm.albedo_texture != null:
 				return true
-			# Explicit non-white albedo from the GLB counts (future textured exports).
 			var c := bm.albedo_color
 			var near_white := c.r > 0.95 and c.g > 0.95 and c.b > 0.95
 			var near_gray := absf(c.r - c.g) < 0.02 and absf(c.g - c.b) < 0.02 and c.r > 0.45 and c.r < 0.75

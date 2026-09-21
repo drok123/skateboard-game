@@ -1,6 +1,6 @@
 # Character Rig — handoff contract (Player Controller / Core Feel)
 
-Owned by **Character Rigging**. Playable path is stance-only until Art ships a skinned export.
+Owned by **Character Rigging**. Playable path prefers `emily_skater_skinned.glb` (Skin/Hair/Clothing + JOINTS) when present; else stance. Never T-pose.
 
 ## Soft secondary — do not fake it
 
