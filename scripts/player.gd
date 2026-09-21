@@ -21,7 +21,7 @@ const AIR_CONTROL := 0.32
 const AIR_TURN := 1.9
 const GRAVITY := 20.0
 const MAX_FALL := -34.0
-const LAND_STICK := 0.78
+const LAND_STICK := 0.72
 const CARVE_LEAN_MAX := 0.42
 const SECONDARY_RECOVER_RATE := 1.8
 const GRIND_MIN_SPEED := 3.5
@@ -45,6 +45,7 @@ var _secondary_intensity := 1.0
 var _board_lean := 0.0
 var _grinding := false
 var _grind_axis := Vector3(1.0, 0.0, 0.0)
+var _land_tween: Tween
 
 
 func _ready() -> void:
@@ -289,11 +290,22 @@ func _ollie_squash() -> void:
 
 
 func _land_squash() -> void:
+	## Big, camera-readable impact: Y squash + brief MeshPivot dip.
 	if mesh == null:
 		return
-	var tw := create_tween()
-	tw.tween_property(mesh, "scale", Vector3(1.22, 0.62, 1.22), 0.06)
-	tw.tween_property(mesh, "scale", Vector3.ONE, 0.18)
+	if _land_tween and _land_tween.is_valid():
+		_land_tween.kill()
+	mesh.scale = Vector3.ONE
+	var base_y := mesh.position.y
+	_land_tween = create_tween()
+	_land_tween.set_parallel(true)
+	_land_tween.tween_property(mesh, "scale", Vector3(1.35, 0.42, 1.35), 0.07)
+	_land_tween.tween_property(mesh, "position:y", base_y - 0.22, 0.07)
+	_land_tween.set_parallel(false)
+	_land_tween.tween_interval(0.04)
+	_land_tween.set_parallel(true)
+	_land_tween.tween_property(mesh, "scale", Vector3.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_land_tween.tween_property(mesh, "position:y", base_y, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _play_sfx_ollie() -> void:
