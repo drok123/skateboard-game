@@ -64,3 +64,17 @@ Order: G1 → G2 → G3 → G4. Skipping allowed; HUD can show “free skate” 
 - HUD copy shortened (title — one action).
 - G1 ignores planter/coping; plaza grind props only.
 - G2/G3/G4 thresholds eased slightly for reliable clears without sticky clover.
+
+## QA zone naming cheat sheet (skate. FIRST — light)
+
+Stable names SessionFlow expects (do not rename without Mission Flow):
+
+| Kind | Names |
+|------|--------|
+| Zones | `zone_street` (south plaza), `zone_snake` (north bowls), `zone_clover` (NE hero), `zone_stairs_b` |
+| G1 plaza grinds | `Flatbar`, `StairsA`, `LongLedge` (also accepts `Ledge` prefix) |
+| G4 prop | `StairsB` (inside `zone_stairs_b`) |
+| Optional (not in G1 yet) | `ManualPad` |
+| Spawn | `SpawnPoint` at south entrance facing +Z |
+
+Verified against box after densify + contrast stack: names still match. Goals stay light — no new meta.
