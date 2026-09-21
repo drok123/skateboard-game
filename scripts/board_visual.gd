@@ -5,8 +5,8 @@ extends MeshInstance3D
 
 const DECK_SIZE := Vector3(0.52, 0.04, 1.28)
 const TRUCK_SIZE := Vector3(0.42, 0.05, 0.12)
-const WHEEL_RADIUS := 0.052
-const WHEEL_WIDTH := 0.058
+const WHEEL_RADIUS := 0.082
+const WHEEL_WIDTH := 0.090
 const WHEELBASE := 0.76
 
 
@@ -32,6 +32,13 @@ func _rebuild() -> void:
 		Vector3(0.0, -DECK_SIZE.y * 0.25, 0.0),
 		_mat_deck_underside()
 	)
+	# Simple dark NY block — Zoo York-inspired silhouette, no asset copy.
+	_add_box(
+		"UndersideNY",
+		Vector3(0.20, 0.008, 0.26),
+		Vector3(0.0, -DECK_SIZE.y * 0.25 - 0.011, 0.0),
+		_mat_underside_mark()
+	)
 	_add_top_graphic()
 	var z_front := WHEELBASE * 0.5
 	var truck_y := -DECK_SIZE.y * 0.5 - TRUCK_SIZE.y * 0.5
@@ -39,8 +46,9 @@ func _rebuild() -> void:
 	_add_box("TruckFront", TRUCK_SIZE, Vector3(0.0, truck_y, z_front), truck_mat)
 	_add_box("TruckBack", TRUCK_SIZE, Vector3(0.0, truck_y, -z_front), truck_mat)
 	var wheel_mat := _mat_wheel()
-	var wheel_x := TRUCK_SIZE.x * 0.5 + WHEEL_WIDTH * 0.35
-	var wheel_y := -DECK_SIZE.y * 0.5 - TRUCK_SIZE.y - WHEEL_RADIUS * 0.15
+	# Hang wheels just outside the hanger so larger disks clear trucks and deck.
+	var wheel_x := TRUCK_SIZE.x * 0.5 + WHEEL_WIDTH * 0.52
+	var wheel_y := -DECK_SIZE.y * 0.5 - TRUCK_SIZE.y - WHEEL_RADIUS * 0.55
 	_add_wheel("WheelFL", Vector3(-wheel_x, wheel_y, z_front), wheel_mat)
 	_add_wheel("WheelFR", Vector3(wheel_x, wheel_y, z_front), wheel_mat)
 	_add_wheel("WheelBL", Vector3(-wheel_x, wheel_y, -z_front), wheel_mat)
@@ -127,23 +135,28 @@ func _named_mat(mat_name: String, albedo: Color, roughness: float, metallic: flo
 
 
 func _mat_deck_top() -> StandardMaterial3D:
-	## Slightly lighter dark wood than the underside so flip orientation reads.
+	## Dark wood rails/top under grip — contrast vs white popsicle underside.
 	return _named_mat("Mat_deck_top", Color(0.20, 0.14, 0.10), 0.90)
 
 
 func _mat_deck_underside() -> StandardMaterial3D:
-	## Solid dark wood — no graphics this pass.
-	return _named_mat("Mat_deck_underside", Color(0.12, 0.08, 0.06), 0.92)
+	## White popsicle underside — Zoo York-inspired read (no asset copy).
+	return _named_mat("Mat_deck_underside", Color(0.94, 0.94, 0.96), 0.78)
+
+
+func _mat_underside_mark() -> StandardMaterial3D:
+	## Dark NY block on white deck.
+	return _named_mat("Mat_underside_mark", Color(0.08, 0.08, 0.09), 0.88)
 
 
 func _mat_truck() -> StandardMaterial3D:
-	## Cooler metal hangers — lighter than charcoal wheels so disks separate.
-	return _named_mat("Mat_truck", Color(0.50, 0.54, 0.58), 0.42, 0.68)
+	## Silver hangers — cooler metal so white urethane disks separate.
+	return _named_mat("Mat_truck", Color(0.62, 0.64, 0.68), 0.38, 0.72)
 
 
 func _mat_wheel() -> StandardMaterial3D:
-	## Dark charcoal rubber, matte. Albedo 0.12–0.18; darker than trucks.
-	return _named_mat("Mat_wheel", Color(0.14, 0.14, 0.15), 0.92)
+	## Bright white urethane, matte. Albedo ~0.95; four disks at mid camera.
+	return _named_mat("Mat_wheel", Color(0.95, 0.95, 0.97), 0.80)
 
 
 func _mat_grip() -> StandardMaterial3D:
