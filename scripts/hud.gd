@@ -23,6 +23,8 @@ var combo: int = 0
 @onready var _quit_button: Button = $PauseOverlay/Center/PausePanel/PauseMargin/VBox/QuitButton
 
 var _player: CharacterBody3D
+var _trick_system: Node
+var _tricks_connected: bool = false
 var _toast_tween: Tween
 var _hint_grace_done: bool = false
 var _hint_dismissed: bool = false
@@ -45,6 +47,7 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if _player == null or not is_instance_valid(_player):
 		_resolve_player()
+	_try_connect_trick_system()
 	_update_speed()
 	_try_dismiss_hint_from_play()
 
@@ -100,6 +103,42 @@ func _resolve_player() -> void:
 		var nodes := get_tree().get_nodes_in_group("player")
 		if not nodes.is_empty():
 			_player = nodes[0] as CharacterBody3D
+	# TrickSystem may appear after player; connect once when found.
+	_try_connect_trick_system()
+
+
+func _try_connect_trick_system() -> void:
+	if _tricks_connected:
+		return
+	if _player == null or not is_instance_valid(_player):
+		return
+	_trick_system = _player.get_node_or_null("TrickSystem")
+	if _trick_system == null:
+		return
+	if _trick_system.has_signal("trick_started"):
+		_trick_system.trick_started.connect(_on_trick_started)
+	if _trick_system.has_signal("combo_changed"):
+		_trick_system.combo_changed.connect(_on_trick_combo_changed)
+	if _trick_system.has_signal("bailed"):
+		_trick_system.bailed.connect(_on_trick_bailed)
+	_tricks_connected = true
+
+
+func _pretty_trick_name(trick_name: String) -> String:
+	## underscores → spaces, capitalize words (kickflip → Kickflip, frontside_180 → Frontside 180).
+	return trick_name.capitalize()
+
+
+func _on_trick_started(trick_name: String) -> void:
+	show_toast(_pretty_trick_name(trick_name))
+
+
+func _on_trick_combo_changed(multiplier: int, _total_score: int) -> void:
+	set_combo(multiplier)
+
+
+func _on_trick_bailed() -> void:
+	reset_combo()
 
 
 func _update_speed() -> void:
